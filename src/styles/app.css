@@ -265,7 +265,24 @@ dialog input[type="password"] {
 .aviso-error { background: var(--estado-critico); color: var(--sobre-primario); }
 
 /* ----- pie ----- */
-.pie { max-width: var(--ancho); margin: 0 auto; padding: 0 var(--e-4) var(--e-6); font-size: var(--t-xs); color: var(--texto-tenue); display: grid; gap: var(--e-1); }
+/* ----- pie de autoría (mismo diseño que el de FinanzasMaker) ----- */
+.pie { max-width: var(--ancho); margin: var(--e-7) auto 0; padding: var(--e-5) var(--e-4) var(--e-6); border-top: 1px solid var(--borde); font-size: var(--t-sm); color: var(--texto-tenue); display: grid; gap: var(--e-5); }
+.pie-fuente { font-size: var(--t-xs); max-width: 70ch; }
+.pie-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--e-4) var(--e-6); }
+.pie-autor { display: flex; align-items: center; gap: var(--e-3); }
+.pie-mono { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 11px; background: var(--primario); color: var(--sobre-primario); font-weight: 700; font-size: var(--t-sm); }
+.pie-hecho { color: var(--texto); }
+.pie-hecho a { color: var(--texto); font-weight: 600; text-decoration-color: var(--primario); text-underline-offset: 3px; }
+.pie-lema { font-style: italic; font-size: var(--t-xs); }
+.pie-enlaces { display: flex; flex-wrap: wrap; gap: var(--e-1) var(--e-5); }
+.pie-enlaces a { color: var(--texto-tenue); text-decoration: none; }
+.pie-enlaces a:hover { color: var(--primario); text-decoration: underline; }
+.pie-redes { display: flex; gap: var(--e-2); }
+.pie-redes a { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--borde); border-radius: 50%; color: var(--texto-tenue); transition: color var(--dur), border-color var(--dur); }
+.pie-redes a:hover { color: var(--primario); border-color: var(--primario); }
+.pie-redes svg { width: 16px; height: 16px; fill: currentColor; }
+.pie-legal { font-size: var(--t-xs); }
+@media (max-width: 40rem) { .pie-in { flex-direction: column; align-items: flex-start; } }
 
 /* ----- móvil ----- */
 @media (max-width: 40rem) {

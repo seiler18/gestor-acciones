@@ -32,6 +32,7 @@ const FILAS_INICIALES = 20
 /* ===== arranque ===== */
 
 async function iniciar() {
+  $('#anio').textContent = String(new Date().getFullYear())
   activarTooltip(document.body, $('#tip'))
   conectarAcceso()
   const guardada = hayBackend() ? clave.get() : null
