@@ -15,6 +15,7 @@ Proyecto **nivel A**. Arquitectura y decisiones: `README.md`. Seguridad:
 | El JSON entre los dos lados | `docs/contrato.md` |
 | Cálculo de posiciones y G/P | `src/lib/cartera.js` — **misma aritmética que la hoja** |
 | Pantalla | `src/main.js` (secciones), `src/lib/graficos.js` (barras y columnas) |
+| Aparecer al hacer scroll, cifras que cuentan; tema | `src/lib/movimiento.js`, `src/styles/movimiento.css`; `src/lib/tema.js` |
 | Datos de ejemplo sin clave | `src/demo.js` — con la forma exacta del contrato |
 | Cliente de la API; URL | `src/lib/api.js`; `src/config.js` |
 | CSP | `vite.config.js` (solo en build) |
@@ -58,7 +59,10 @@ Qué se hizo antes y por qué: `.claude/hitos/` (empieza por su `README.md`).
 
 `npm test` (cálculo, `Api.gs` en Node con Apps Script simulado, contrato de la
 demo) y `npm run build && npm run preview`. Capturas sin navegador interactivo:
-`chrome.exe --headless=new --screenshot=… --window-size=1280,3200 <url>`. Chrome
+`chrome.exe --headless=new --screenshot=… --window-size=1280,3200 <url>`, pero
+**congela las animaciones**: las secciones salen sin revelar. Para ver la
+página terminada o probar clics, `playwright-core` en el scratchpad con el
+Chrome instalado (`executablePath`), bajando la página antes de capturar. Chrome
 headless no baja de ~500 px de ancho, así que una captura a 390 px sale cortada
 aunque la página esté bien. Pasa `--blink-settings=preferredColorScheme=1`
 para el tema claro. El backend real solo se prueba desplegado.

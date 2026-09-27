@@ -78,6 +78,14 @@
   /* ----- Movimiento ----- */
   --dur:  160ms;
   --dur-barra: 420ms;
+  --dur-medio: 280ms;        /* hover de mosaicos, diálogos al salir */
+  --dur-entra: 560ms;        /* secciones que aparecen al hacer scroll */
+  --dur-cuenta: 900ms;       /* cifras que cuentan hasta su valor (lib/movimiento.js) */
+  --escalon: 55ms;           /* retraso entre elementos que entran en fila */
+  --sin-espera: 0ms;         /* retraso nulo, para listas de transition-delay */
+  --curva:   cubic-bezier(0.22, 0.61, 0.36, 1);
+  --resorte: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --desplaza: 18px;          /* cuánto sube una sección al aparecer */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,5 +136,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur: 0ms; --dur-barra: 0ms; }
+  :root { --dur: 0ms; --dur-barra: 0ms; --dur-medio: 0ms; --dur-entra: 0ms; --dur-cuenta: 0ms; --escalon: 0ms; --desplaza: 0px; }
 }

@@ -14,7 +14,7 @@ import { html } from './dom.js'
 export function barras(filas) {
   const max = Math.max(...filas.map((f) => f.valor), 0) || 1
   return html`<ul class="barras" role="list">
-    ${filas.map((f) => html`<li class="barra-fila" tabindex="0" data-tip="${f.tip}">
+    ${filas.map((f) => html`<li class="barra-fila" tabindex="0" data-tip="${f.tip}" ${f.ticker ? html`data-ticker="${f.ticker}" role="button"` : ''}>
       <span class="barra-etq"><b>${f.etiqueta}</b>${f.detalle ? html`<small>${f.detalle}</small>` : ''}</span>
       <span class="barra-pista"><span class="barra serie-1" data-w="${(f.valor / max).toFixed(4)}"></span></span>
       <span class="barra-val">${f.texto}</span>
@@ -30,7 +30,7 @@ export function divergentes(filas) {
   return html`<ul class="barras divergentes" role="list">
     ${filas.map((f) => {
       const lado = f.valor < 0 ? 'neg' : 'pos'
-      return html`<li class="barra-fila" tabindex="0" data-tip="${f.tip}">
+      return html`<li class="barra-fila" tabindex="0" data-tip="${f.tip}" ${f.ticker ? html`data-ticker="${f.ticker}" role="button"` : ''}>
         <span class="barra-etq"><b>${f.etiqueta}</b>${f.detalle ? html`<small>${f.detalle}</small>` : ''}</span>
         <span class="barra-pista pista-div">
           <span class="mitad mitad-neg">${lado === 'neg' ? html`<span class="barra barra-neg" data-w="${(Math.abs(f.valor) / max).toFixed(4)}"></span>` : ''}</span>
@@ -62,7 +62,8 @@ export function columnas(serie, { formato, destacar = -1, alto = 200, ancho = 64
     ${serie.map((d, i) => {
       const cx = m.izq + paso * i + paso / 2
       const h = y(0) - y(d.valor)
-      return html`<g class="col" tabindex="0" data-tip="${d.tip}">
+      // data-i: el clic en una columna abre su detalle (main.js, dividendos).
+      return html`<g class="col" tabindex="0" role="button" data-i="${i}" data-tip="${d.tip}">
         <rect class="col-hit" x="${m.izq + paso * i}" y="${m.arriba}" width="${paso}" height="${areaAlto}"></rect>
         ${d.valor > 0 ? html`<path class="serie-1-fill" d="${columnaRedondeada(cx - grosor / 2, y(d.valor), grosor, h)}"></path>` : ''}
         ${i === destacar && d.valor > 0 ? html`<text class="col-etq" x="${cx}" y="${y(d.valor) - 6}" text-anchor="middle">${formato(d.valor)}</text>` : ''}

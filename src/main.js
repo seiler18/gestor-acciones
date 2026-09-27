@@ -1,17 +1,21 @@
 import './styles/tokens.css'
 import './styles/app.css'
+import './styles/movimiento.css'
 import { protegerMarco } from './lib/marco.js'
-import { html, pintar, $, aviso } from './lib/dom.js'
+import { html, pintar, $, $$, aviso } from './lib/dom.js'
 import { hayBackend, clave, cartera as pedirCartera, ErrorApi } from './lib/api.js'
 import { calcularCartera } from './lib/cartera.js'
 import { datosDemo } from './demo.js'
 import { barras, divergentes, columnas, aplicarMedidas, activarTooltip } from './lib/graficos.js'
 import { fUsd, fUsdSigno, fClp, fClpSigno, fNum, fAcciones, fPct, fPctSigno, fFecha, fFechaHora, fMes, dir } from './lib/formato.js'
+import { revelarAlVer, contar, menosMovimiento } from './lib/movimiento.js'
+import { iniciarTema, alternarTema, temaActual } from './lib/tema.js'
 
 protegerMarco()
+iniciarTema()
 
 const app = $('#app')
-const estado = { modo: 'demo', datos: null, filtro: 'todos', verTodos: false }
+const estado = { modo: 'demo', datos: null, filtro: 'todos', busqueda: '', verTodos: false, orden: { campo: 'valor', sube: false }, mesDiv: null }
 
 const TIPOS = {
   compra: 'Compra',
@@ -28,6 +32,13 @@ const FILTROS = [
   ['dolares', 'Dólares'],
 ]
 const FILAS_INICIALES = 20
+const pasaFiltro = (m, f) => f === 'todos' || (f === 'dolares' ? m.ticker === 'USD' : m.tipo === f)
+
+// Íconos de trazo (estilo Lucide) escritos aquí: sin librería ni peticiones.
+const ICONO = {
+  sol: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  luna: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>',
+}
 
 /* ===== arranque ===== */
 
@@ -35,6 +46,8 @@ async function iniciar() {
   $('#anio').textContent = String(new Date().getFullYear())
   activarTooltip(document.body, $('#tip'))
   conectarAcceso()
+  conectarTema()
+  conectarDetalle()
   const guardada = hayBackend() ? clave.get() : null
   if (guardada) await cargarReal(guardada)
   else mostrar('demo', datosDemo())
@@ -58,11 +71,12 @@ function mostrar(modo, datos) {
   estado.modo = modo
   estado.datos = datos
   estado.calculo = calcularCartera(datos)
+  estado.mesDiv = null
   pintarEstado()
   pintarTodo()
 }
 
-/* ===== cabecera y acceso ===== */
+/* ===== cabecera, tema y acceso ===== */
 
 function pintarEstado(cargando) {
   const d = estado.datos
@@ -75,6 +89,20 @@ function pintarEstado(cargando) {
   const boton = $('#btn-acceso')
   boton.hidden = !hayBackend()
   boton.textContent = estado.modo === 'real' ? 'Salir' : 'Entrar con clave'
+}
+
+// El botón muestra el tema al que se pasa, no el actual. Íconos constantes
+// del código, por eso innerHTML.
+function conectarTema() {
+  const b = $('#btn-tema')
+  const pintarBoton = (tema = temaActual()) => {
+    const oscuro = tema === 'dark'
+    b.innerHTML = oscuro ? ICONO.sol : ICONO.luna
+    b.setAttribute('aria-label', oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro')
+    b.title = b.getAttribute('aria-label')
+  }
+  pintarBoton()
+  b.addEventListener('click', () => pintarBoton(alternarTema()))
 }
 
 function conectarAcceso() {
@@ -93,7 +121,7 @@ function conectarAcceso() {
     form.reset()
     dlg.showModal()
   })
-  $('#btn-cancelar').addEventListener('click', () => dlg.close())
+  $('#btn-cancelar').addEventListener('click', () => cerrarDialogo(dlg))
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -119,6 +147,25 @@ function conectarAcceso() {
   })
 }
 
+/* Cierra un <dialog> dejando correr su animación de salida (.saliendo en
+   movimiento.css). El listener se quita al cerrar: colgado, el animationend
+   de la ENTRADA siguiente cerraría el diálogo apenas abierto (pasó en
+   FinanzasMaker). El temporizador es la red por si la animación no corre. */
+function cerrarDialogo(dlg) {
+  if (!dlg.open) return
+  if (menosMovimiento()) return dlg.close()
+  const alTerminar = (e) => { if (e.target === dlg) fin() }
+  const fin = () => {
+    clearTimeout(red)
+    dlg.removeEventListener('animationend', alTerminar)
+    dlg.classList.remove('saliendo')
+    dlg.close()
+  }
+  const red = setTimeout(fin, 400)
+  dlg.classList.add('saliendo')
+  dlg.addEventListener('animationend', alTerminar)
+}
+
 /* ===== secciones ===== */
 
 function pintarTodo() {
@@ -136,8 +183,11 @@ function pintarTodo() {
     ${movimientos()}
   `)
   aplicarMedidas(app)
+  pintarTablaCartera()
   pintarColumnasDividendos()
   conectarMovimientos()
+  conectarSecciones()
+  revelarAlVer(app)
 }
 
 function avisoDemo() {
@@ -147,79 +197,117 @@ function avisoDemo() {
   </p>`
 }
 
-function tile(etiqueta, valor, nota = '', clase = '') {
-  return html`<div class="tile">
-    <p class="tile-etq">${etiqueta}</p>
-    <p class="tile-val ${clase}">${valor}</p>
-    ${nota ? html`<p class="tile-nota">${nota}</p>` : ''}
-  </div>`
+/* Cada mosaico lleva a la sección que explica su cifra (data-ir) y, si
+   corresponde, deja filtrados los movimientos (data-filtro-ir). */
+function tile(etiqueta, valor, { nota = '', clase = '', cuenta = null, formato = '', ir = '', filtro = '' } = {}) {
+  return html`<button type="button" class="tile" data-ir="${ir}" ${filtro ? html`data-filtro-ir="${filtro}"` : ''}>
+    <span class="tile-etq">${etiqueta}<span class="tile-flecha" aria-hidden="true">↓</span></span>
+    <span class="tile-val ${clase}" ${cuenta !== null ? html`data-cuenta="${cuenta}" data-formato="${formato}"` : ''}>${valor}</span>
+    ${nota ? html`<span class="tile-nota">${nota}</span>` : ''}
+  </button>`
 }
 
 function resumen(c) {
   const t = c.totales
-  return html`<section class="resumen" aria-labelledby="h-resumen">
+  return html`<section class="resumen revela" aria-labelledby="h-resumen">
     <div class="hero">
       <h2 id="h-resumen" class="hero-etq">Resultado total de la cartera</h2>
-      <p class="hero-cifra ${dir(t.resultado)}">${fUsdSigno(t.resultado)}</p>
+      <p class="hero-cifra ${dir(t.resultado)}" data-cuenta="${t.resultado}" data-formato="usdSigno">${fUsdSigno(t.resultado)}</p>
       <p class="hero-sub">
         ${t.resultadoClp !== null ? html`≈ ${fClpSigno(t.resultadoClp)} al dólar de hoy · ` : ''}
         realizado ${fUsdSigno(t.gpRealizada)} · no realizado ${fUsdSigno(t.gpNoRealizada)} · dividendos ${fUsd(t.dividendos)}
       </p>
     </div>
     <div class="tiles">
-      ${tile('Valor de la cartera hoy', fUsd(t.valorCartera), `${c.abiertas.length} posición${c.abiertas.length === 1 ? '' : 'es'} abierta${c.abiertas.length === 1 ? '' : 's'}`)}
-      ${tile('Invertido en acciones', fUsd(t.invertido), 'suma de todas las compras')}
-      ${tile('Recibido por ventas', fUsd(t.ventas))}
-      ${tile('Dividendos acumulados', fUsd(t.dividendos))}
-      ${tile('Dólar hoy', t.dolar !== null ? `$${fNum(t.dolar)}` : '—', 'CLP por USD')}
-      ${tile('Comisiones pagadas', fClp(t.comisionesClp), 'en compra y venta de dólares')}
+      ${tile('Valor de la cartera hoy', fUsd(t.valorCartera), { nota: `${c.abiertas.length} posición${c.abiertas.length === 1 ? '' : 'es'} abierta${c.abiertas.length === 1 ? '' : 's'}`, cuenta: t.valorCartera, formato: 'usd', ir: 'h-cartera' })}
+      ${tile('Invertido en acciones', fUsd(t.invertido), { nota: 'suma de todas las compras', cuenta: t.invertido, formato: 'usd', ir: 'h-mov', filtro: 'compra' })}
+      ${tile('Recibido por ventas', fUsd(t.ventas), { cuenta: t.ventas, formato: 'usd', ir: 'h-mov', filtro: 'venta' })}
+      ${tile('Dividendos acumulados', fUsd(t.dividendos), { cuenta: t.dividendos, formato: 'usd', ir: c.dividendosPorMes.length ? 'h-div' : 'h-mov', filtro: c.dividendosPorMes.length ? '' : 'dividendo' })}
+      ${tile('Dólar hoy', t.dolar !== null ? `$${fNum(t.dolar)}` : '—', { nota: 'CLP por USD', ir: 'h-usd' })}
+      ${tile('Comisiones pagadas', fClp(t.comisionesClp), { nota: 'en compra y venta de dólares', cuenta: t.comisionesClp, formato: 'clp', ir: 'h-usd' })}
     </div>
   </section>`
 }
 
 function carteraActual(c) {
   if (!c.abiertas.length) {
-    return html`<section class="panel"><h2>Cartera actual</h2><p class="vacio">No hay posiciones abiertas.</p></section>`
+    return html`<section class="panel revela"><h2>Cartera actual</h2><p class="vacio">No hay posiciones abiertas.</p></section>`
   }
   const filas = c.abiertas.map((p) => ({
+    ticker: p.ticker,
     etiqueta: p.ticker,
     detalle: p.nombre,
     valor: p.valor ?? 0,
     texto: html`${fUsd(p.valor)} <small>${fPct(p.peso)}</small>`,
-    tip: `${p.ticker}: ${fUsd(p.valor)} (${fPct(p.peso)} de la cartera)`,
+    tip: `${p.ticker}: ${fUsd(p.valor)} (${fPct(p.peso)} de la cartera) · toca para ver el detalle`,
   }))
-  return html`<section class="panel" aria-labelledby="h-cartera">
+  return html`<section class="panel revela" aria-labelledby="h-cartera">
     <header class="panel-cab">
       <h2 id="h-cartera">Cartera actual</h2>
-      <p>Valor de cada posición abierta al precio de hoy, en USD</p>
+      <p>Valor de cada posición abierta al precio de hoy, en USD. Toca un activo para ver su detalle</p>
     </header>
     ${barras(filas)}
-    <div class="tabla-envoltura">
-      <table>
-        <thead><tr>
-          <th scope="col">Activo</th><th scope="col" class="num">Acciones</th><th scope="col" class="num">Costo prom.</th>
-          <th scope="col" class="num">Precio hoy</th><th scope="col" class="num">Cambio hoy</th><th scope="col" class="num">Valor</th>
-          <th scope="col" class="num">G/P no realizada</th>
-        </tr></thead>
-        <tbody>
-          ${c.abiertas.map((p) => html`<tr>
-            <th scope="row"><b>${p.ticker}</b> <small>${p.nombre}</small></th>
-            <td class="num">${fAcciones(p.tenencia)}</td>
-            <td class="num">${fUsd(p.costoProm)}</td>
-            <td class="num">${fUsd(p.precio)}</td>
-            <td class="num ${dir(p.cambioDia)}">${fPctSigno(p.cambioDia)}</td>
-            <td class="num">${fUsd(p.valor)}</td>
-            <td class="num ${dir(p.gpNoRealizada)}">${fUsdSigno(p.gpNoRealizada)} <small>${p.costoProm ? fPctSigno(p.gpNoRealizada / (p.tenencia * p.costoProm)) : ''}</small></td>
-          </tr>`)}
-        </tbody>
-      </table>
-    </div>
+    <div class="tabla-envoltura" id="tabla-cartera"></div>
   </section>`
+}
+
+/* Tabla de la cartera, ordenable por columna. Al reordenar, cada fila tiene
+   nombre de transición propio y se desliza a su lugar nuevo (View
+   Transitions); el nombre sale del índice, no del ticker: «BRK.B» no es un
+   identificador CSS válido. */
+const COLUMNAS = [
+  ['ticker', 'Activo', false],
+  ['tenencia', 'Acciones', true],
+  ['costoProm', 'Costo prom.', true],
+  ['precio', 'Precio hoy', true],
+  ['cambioDia', 'Cambio hoy', true],
+  ['valor', 'Valor', true],
+  ['gpNoRealizada', 'G/P no realizada', true],
+]
+
+function pintarTablaCartera() {
+  const cont = $('#tabla-cartera')
+  if (!cont) return
+  const { campo, sube } = estado.orden
+  const base = estado.calculo.abiertas.map((p, i) => ({ p, i }))
+  const valorDe = (p) => (campo === 'ticker' ? p.ticker : p[campo] ?? -Infinity)
+  base.sort((a, b) => {
+    const x = valorDe(a.p), y = valorDe(b.p)
+    const r = typeof x === 'string' ? x.localeCompare(y) : x - y
+    return sube ? r : -r
+  })
+  pintar(cont, html`<table>
+    <thead><tr>
+      ${COLUMNAS.map(([k, nombre, num]) => html`<th scope="col" class="${num ? 'num' : ''}" aria-sort="${campo === k ? (sube ? 'ascending' : 'descending') : 'none'}">
+        <button type="button" class="orden" data-orden="${k}">${nombre}<span class="orden-flecha" aria-hidden="true">${campo === k ? (sube ? '▲' : '▼') : '↕'}</span></button>
+      </th>`)}
+    </tr></thead>
+    <tbody>
+      ${base.map(({ p, i }) => html`<tr class="fila-activo" data-ticker="${p.ticker}" data-i="${i}" tabindex="0">
+        <th scope="row"><b>${p.ticker}</b> <small>${p.nombre}</small></th>
+        <td class="num">${fAcciones(p.tenencia)}</td>
+        <td class="num">${fUsd(p.costoProm)}</td>
+        <td class="num">${fUsd(p.precio)}</td>
+        <td class="num ${dir(p.cambioDia)}">${fPctSigno(p.cambioDia)}</td>
+        <td class="num">${fUsd(p.valor)}</td>
+        <td class="num ${dir(p.gpNoRealizada)}">${fUsdSigno(p.gpNoRealizada)} <small>${p.costoProm ? fPctSigno(p.gpNoRealizada / (p.tenencia * p.costoProm)) : ''}</small></td>
+      </tr>`)}
+    </tbody>
+  </table>`)
+  cont.querySelectorAll('tbody tr').forEach((tr) => tr.style.setProperty('view-transition-name', `fila-${tr.dataset.i}`))
+}
+
+function ordenarCartera(campo) {
+  const o = estado.orden
+  estado.orden = { campo, sube: o.campo === campo ? !o.sube : campo === 'ticker' }
+  if (document.startViewTransition && !menosMovimiento()) document.startViewTransition(pintarTablaCartera)
+  else pintarTablaCartera()
 }
 
 function resultadoPorActivo(c) {
   const lista = [...c.posiciones].sort((a, b) => b.resultado - a.resultado)
   const filas = lista.map((p) => ({
+    ticker: p.ticker,
     etiqueta: p.ticker,
     detalle: p.abierta ? 'abierta' : '',
     valor: p.resultado,
@@ -227,7 +315,7 @@ function resultadoPorActivo(c) {
     texto: fUsdSigno(p.resultado),
     tip: `${p.ticker} · ${p.nombre}: realizado ${fUsdSigno(p.gpRealizada)}, no realizado ${fUsdSigno(p.gpNoRealizada)}, dividendos ${fUsd(p.dividendos)}`,
   }))
-  return html`<section class="panel" aria-labelledby="h-resultado">
+  return html`<section class="panel revela" aria-labelledby="h-resultado">
     <header class="panel-cab">
       <h2 id="h-resultado">Resultado por activo</h2>
       <p>Ganancia o pérdida realizada + no realizada + dividendos, en USD, de todo lo que has tenido</p>
@@ -244,12 +332,13 @@ function dividendos(c) {
   const serie = c.dividendosPorMes
   if (!serie.length) return ''
   const total = serie.reduce((s, d) => s + d.usd, 0)
-  return html`<section class="panel" aria-labelledby="h-div">
+  return html`<section class="panel revela" aria-labelledby="h-div">
     <header class="panel-cab">
       <h2 id="h-div">Dividendos por mes</h2>
-      <p>${fUsd(total)} en ${serie.length} meses · los meses sin dividendo cuentan como cero</p>
+      <p>${fUsd(total)} en ${serie.length} meses · los meses sin dividendo cuentan como cero. Toca un mes para ver de qué activo vino</p>
     </header>
     <div class="grafico" id="graf-div"></div>
+    <div id="mes-div" class="mes-div" aria-live="polite"></div>
   </section>`
 }
 
@@ -265,6 +354,29 @@ function pintarColumnasDividendos() {
     serie.map((d) => ({ etiqueta: fMes(d.mes), valor: d.usd, tip: `${fMes(d.mes)}: ${fUsd(d.usd)}` })),
     { formato: fUsd, destacar: max, ancho: Math.max(280, Math.round(cont.clientWidth)) },
   ))
+  marcarMesDividendo()
+}
+
+function marcarMesDividendo() {
+  const serie = estado.calculo.dividendosPorMes
+  $$('#graf-div .col').forEach((g) => g.setAttribute('aria-pressed', String(serie[Number(g.dataset.i)]?.mes === estado.mesDiv)))
+}
+
+function elegirMesDividendo(i) {
+  const d = estado.calculo.dividendosPorMes[i]
+  if (!d) return
+  estado.mesDiv = estado.mesDiv === d.mes ? null : d.mes
+  marcarMesDividendo()
+  const cont = $('#mes-div')
+  if (!estado.mesDiv) return pintar(cont, '')
+  const lista = (estado.datos.movimientos || []).filter((m) => m.tipo === 'dividendo' && m.fecha.startsWith(d.mes))
+  pintar(cont, html`<div class="mes-div-caja">
+    <p class="mes-div-tit"><b>${fMes(d.mes)}</b> · ${fUsd(d.usd)}</p>
+    ${lista.length ? html`<ul class="mes-div-lista">${lista.map((m) => html`<li>
+      <button type="button" class="enlace-activo" data-ticker="${m.ticker}"><b>${m.ticker}</b> <small>${m.activo}</small></button>
+      <span class="num sube">+${fUsd(m.usd)}</span></li>`)}</ul>`
+      : html`<p class="vacio">Ese mes no hubo dividendos.</p>`}
+  </div>`)
 }
 
 let esperaResize
@@ -281,7 +393,7 @@ const CLASE_ALERTA = [
 ]
 
 function alertas(lista) {
-  return html`<section class="panel" aria-labelledby="h-alertas">
+  return html`<section class="panel revela" aria-labelledby="h-alertas">
     <header class="panel-cab">
       <h2 id="h-alertas">Alertas recientes</h2>
       <p>Las escribe la hoja cada vez que corre (umbrales en su pestaña Configuración)</p>
@@ -304,7 +416,7 @@ function alertas(lista) {
 function dolares(c) {
   const f = c.flujoDolares
   const prom = (clp, usd) => (usd ? clp / usd : null)
-  return html`<section class="panel" aria-labelledby="h-usd">
+  return html`<section class="panel revela" aria-labelledby="h-usd">
     <header class="panel-cab">
       <h2 id="h-usd">Cambio de dólares</h2>
       <p>Pesos que pasaron a dólares para invertir, y de vuelta</p>
@@ -318,13 +430,18 @@ function dolares(c) {
 }
 
 function movimientos() {
-  return html`<section class="panel" aria-labelledby="h-mov">
+  const todos = estado.datos.movimientos || []
+  return html`<section class="panel revela" aria-labelledby="h-mov">
     <header class="panel-cab">
       <h2 id="h-mov">Movimientos</h2>
       <p>Lo que leyó la hoja de tus correos de Fintual, más el historial cargado a mano</p>
     </header>
-    <div class="filtros" role="group" aria-label="Filtrar movimientos">
-      ${FILTROS.map(([id, nombre]) => html`<button type="button" class="filtro" data-filtro="${id}" aria-pressed="${estado.filtro === id}">${nombre}</button>`)}
+    <div class="mov-controles">
+      <div class="filtros" role="group" aria-label="Filtrar movimientos">
+        ${FILTROS.map(([id, nombre]) => html`<button type="button" class="filtro" data-filtro="${id}" aria-pressed="${estado.filtro === id}">${nombre}<span class="filtro-n">${todos.filter((m) => pasaFiltro(m, id)).length}</span></button>`)}
+      </div>
+      <label class="buscar"><span class="oculto-visual">Buscar un activo</span>
+        <input type="search" id="buscar-mov" placeholder="Buscar activo (VOO, Apple…)" value="${estado.busqueda}" autocomplete="off"></label>
     </div>
     <div id="tabla-mov"></div>
   </section>`
@@ -332,17 +449,17 @@ function movimientos() {
 
 function pintarMovimientos() {
   const todos = [...(estado.datos.movimientos || [])].reverse()
-  const f = estado.filtro
-  const lista = todos.filter((m) => f === 'todos' || (f === 'dolares' ? m.ticker === 'USD' : m.tipo === f))
+  const q = estado.busqueda.trim().toLowerCase()
+  const lista = todos.filter((m) => pasaFiltro(m, estado.filtro) && (!q || `${m.ticker} ${m.activo}`.toLowerCase().includes(q)))
   const visibles = estado.verTodos ? lista : lista.slice(0, FILAS_INICIALES)
-  pintar($('#tabla-mov'), html`<div class="tabla-envoltura">
-      <table>
+  pintar($('#tabla-mov'), html`${visibles.length ? html`<div class="tabla-envoltura">
+      <table class="anima-filas">
         <thead><tr>
           <th scope="col">Fecha</th><th scope="col">Tipo</th><th scope="col">Activo</th>
           <th scope="col" class="num">Cantidad</th><th scope="col" class="num">Monto USD</th><th scope="col" class="num">Monto CLP</th>
         </tr></thead>
         <tbody>
-          ${visibles.map((m) => html`<tr>
+          ${visibles.map((m) => html`<tr ${m.ticker !== 'USD' ? html`class="fila-activo" data-ticker="${m.ticker}" tabindex="0"` : ''}>
             <td>${fFecha(m.fecha)}</td>
             <td><span class="tipo tipo-${m.tipo}">${TIPOS[m.tipo] || m.tipo}</span></td>
             <td><b>${m.ticker}</b> <small>${m.ticker === 'USD' ? '' : m.activo}</small></td>
@@ -352,10 +469,17 @@ function pintarMovimientos() {
           </tr>`)}
         </tbody>
       </table>
-    </div>
+    </div>` : html`<p class="vacio">Ningún movimiento coincide${q ? html` con «${estado.busqueda.trim()}»` : ''}.</p>`}
     ${lista.length > visibles.length
       ? html`<button type="button" class="mas" id="btn-mas">Mostrar los ${lista.length} movimientos</button>`
-      : html`<p class="tabla-pie">${lista.length} movimiento${lista.length === 1 ? '' : 's'}</p>`}`)
+      : visibles.length ? html`<p class="tabla-pie">${lista.length} movimiento${lista.length === 1 ? '' : 's'}</p>` : ''}`)
+}
+
+function filtrarMovimientos(filtro) {
+  estado.filtro = filtro
+  estado.verTodos = false
+  for (const x of $$('[data-filtro]')) x.setAttribute('aria-pressed', String(x.dataset.filtro === filtro))
+  pintarMovimientos()
 }
 
 function conectarMovimientos() {
@@ -363,17 +487,112 @@ function conectarMovimientos() {
   const sec = $('#h-mov').closest('section')
   sec.addEventListener('click', (e) => {
     const b = e.target.closest('[data-filtro]')
-    if (b) {
-      estado.filtro = b.dataset.filtro
-      estado.verTodos = false
-      for (const x of sec.querySelectorAll('[data-filtro]')) x.setAttribute('aria-pressed', String(x === b))
-      pintarMovimientos()
-    }
+    if (b) filtrarMovimientos(b.dataset.filtro)
     if (e.target.closest('#btn-mas')) {
       estado.verTodos = true
       pintarMovimientos()
     }
   })
+  let espera
+  $('#buscar-mov').addEventListener('input', (e) => {
+    clearTimeout(espera)
+    espera = setTimeout(() => {
+      estado.busqueda = e.target.value
+      estado.verTodos = false
+      pintarMovimientos()
+    }, 120)
+  })
+}
+
+/* Clics que cruzan secciones: un mosaico lleva a la suya, un activo abre su
+   detalle, una columna de dividendos muestra su mes, un encabezado ordena. */
+function conectarSecciones() {
+  app.addEventListener('click', (e) => {
+    const t = e.target.closest('.tile[data-ir]')
+    if (t) return irA(t.dataset.ir, t.dataset.filtroIr)
+    const o = e.target.closest('[data-orden]')
+    if (o) return ordenarCartera(o.dataset.orden)
+    const col = e.target.closest('#graf-div .col')
+    if (col) return elegirMesDividendo(Number(col.dataset.i))
+    const a = e.target.closest('[data-ticker]')
+    if (a) abrirActivo(a.dataset.ticker)
+  })
+  // Filas y barras con tabindex: Enter o espacio hacen lo mismo que el clic.
+  app.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    const el = e.target.closest('tr[data-ticker], li[data-ticker], #graf-div .col')
+    if (!el || e.target.closest('button, input')) return
+    e.preventDefault()
+    if (el.matches('.col')) elegirMesDividendo(Number(el.dataset.i))
+    else abrirActivo(el.dataset.ticker)
+  })
+}
+
+function irA(id, filtro) {
+  if (filtro) filtrarMovimientos(filtro)
+  const sec = document.getElementById(id)?.closest('section')
+  if (!sec) return
+  sec.scrollIntoView({ behavior: menosMovimiento() ? 'auto' : 'smooth', block: 'start' })
+  // Un destello en la sección de destino dice «es aquí».
+  sec.classList.remove('destello')
+  void sec.offsetWidth
+  sec.classList.add('destello')
+}
+
+/* ===== detalle de un activo ===== */
+
+function conectarDetalle() {
+  const dlg = $('#dlg-activo')
+  dlg.addEventListener('click', (e) => {
+    // El clic en el velo cae en el propio <dialog>, fuera de su contenido.
+    if (e.target === dlg || e.target.closest('[data-cerrar]')) cerrarDialogo(dlg)
+  })
+}
+
+function abrirActivo(ticker) {
+  const p = estado.calculo.posiciones.find((x) => x.ticker === ticker)
+  if (!p) return
+  const movs = (estado.datos.movimientos || []).filter((m) => m.ticker === ticker).reverse()
+  const costoAbierto = p.tenencia * p.costoProm
+  const dlg = $('#dlg-activo')
+  pintar(dlg, html`<div class="det">
+    <span class="det-asa" aria-hidden="true"></span>
+    <header class="det-cab">
+      <div>
+        <p class="det-estado"><span class="chip ${p.abierta ? 'chip-senal' : ''}">${p.abierta ? 'Posición abierta' : 'Cerrada'}</span></p>
+        <h2 id="det-titulo">${p.ticker}</h2>
+        <p class="det-nombre">${p.nombre}</p>
+      </div>
+      <button type="button" class="btn btn-icono" data-cerrar aria-label="Cerrar">×</button>
+    </header>
+    <p class="det-cifra ${dir(p.resultado)}" data-cuenta="${p.resultado}" data-formato="usdSigno">${fUsdSigno(p.resultado)}</p>
+    <p class="det-sub">resultado total: realizado ${fUsdSigno(p.gpRealizada)} · no realizado ${fUsdSigno(p.gpNoRealizada)} · dividendos ${fUsd(p.dividendos)}</p>
+    ${p.abierta && p.valor !== null && costoAbierto > 0 ? html`
+      <div class="det-comp" aria-label="Lo que costó frente a lo que vale hoy">
+        <div><span>Costó</span><span class="det-pista"><span class="det-barra det-costo" data-w="${Math.min(1, costoAbierto / Math.max(costoAbierto, p.valor)).toFixed(4)}"></span></span><b>${fUsd(costoAbierto)}</b></div>
+        <div><span>Vale hoy</span><span class="det-pista"><span class="det-barra ${p.valor >= costoAbierto ? 'barra-pos' : 'barra-neg-d'}" data-w="${Math.min(1, p.valor / Math.max(costoAbierto, p.valor)).toFixed(4)}"></span></span><b>${fUsd(p.valor)}</b></div>
+      </div>` : ''}
+    <dl class="det-datos">
+      ${p.abierta ? html`
+        <div><dt>Acciones</dt><dd>${fAcciones(p.tenencia)}</dd></div>
+        <div><dt>Costo promedio</dt><dd>${fUsd(p.costoProm)}</dd></div>
+        <div><dt>Precio hoy</dt><dd>${fUsd(p.precio)} <small class="${dir(p.cambioDia)}">${fPctSigno(p.cambioDia)}</small></dd></div>
+        <div><dt>Peso en la cartera</dt><dd>${fPct(p.peso)}</dd></div>` : ''}
+      <div><dt>Invertido</dt><dd>${fUsd(p.invertido)}</dd></div>
+      <div><dt>Recibido por ventas</dt><dd>${fUsd(p.ventas)}</dd></div>
+      <div><dt>Primer movimiento</dt><dd>${fFecha(p.primera)}</dd></div>
+      <div><dt>Último movimiento</dt><dd>${fFecha(p.ultima)}</dd></div>
+    </dl>
+    <h3 class="det-sub-tit">Movimientos de ${p.ticker} <small>${movs.length}</small></h3>
+    <ol class="det-movs">${movs.slice(0, 40).map((m) => html`<li>
+      <span><span class="tipo tipo-${m.tipo}">${TIPOS[m.tipo] || m.tipo}</span> <small>${fFecha(m.fecha)}</small></span>
+      <span class="num">${m.tipo === 'dividendo' ? '' : html`<small>${fAcciones(m.cantidad)} acc. · </small>`}<b class="${m.tipo === 'venta' || m.tipo === 'dividendo' ? 'sube' : ''}">${m.tipo === 'compra' ? '−' : '+'}${fUsd(m.usd)}</b></span>
+    </li>`)}</ol>
+  </div>`)
+  aplicarMedidas(dlg)
+  if (!dlg.open) dlg.showModal()
+  dlg.querySelector('.det').scrollTop = 0
+  dlg.querySelectorAll('[data-cuenta]').forEach(contar)
 }
 
 iniciar()

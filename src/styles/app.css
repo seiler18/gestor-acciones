@@ -95,14 +95,17 @@ a { color: var(--primario); }
   grid-template-columns: repeat(auto-fit, minmax(min(10.5rem, 100%), 1fr));
   gap: var(--e-3);
 }
+/* Cada mosaico es un botón: lleva a la sección que explica su cifra. */
 .tile {
+  display: grid; align-content: start; gap: 0;
+  width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
   background: var(--surface);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
   padding: var(--e-3) var(--e-4);
 }
-.tile-etq { font-size: var(--t-sm); color: var(--texto-2); }
-.tile-val { font-size: var(--t-lg); font-weight: 650; margin-top: var(--e-1); }
+.tile-etq { display: flex; justify-content: space-between; gap: var(--e-2); font-size: var(--t-sm); color: var(--texto-2); }
+.tile-val { font-size: var(--t-lg); font-weight: 650; margin-top: var(--e-1); font-variant-numeric: tabular-nums; }
 .tile-nota { font-size: var(--t-xs); color: var(--texto-tenue); }
 
 /* Dirección: el color acompaña al signo (+/−), nunca va solo. */
