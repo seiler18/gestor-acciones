@@ -1,10 +1,17 @@
 /* Cálculo de la cartera a partir de los hechos del contrato (docs/contrato.md).
 
    Es la MISMA aritmética que las hojas Posiciones y Resultados de la planilla
-   (backend/Code.gs, buildPosiciones): costo promedio de todas las compras,
-   G/P realizada = ventas − acciones vendidas × costo promedio. Si cambias una
-   fórmula aquí, el dashboard y la hoja dejan de cuadrar. Se validó contra el
-   libro real el 2026-09-27 (hito 0001); tests/cartera.test.mjs fija los casos.
+   (backend/Code.gs, costoPromedioMovil_): costo promedio MÓVIL, el que tenías
+   al momento de cada venta, que es como lo calcula Fintual. Si cambias una
+   aquí, cambia la otra: tests/cartera.test.mjs ejecuta la de Code.gs y
+   compara.
+
+   Hasta el hito 0004 se usaba el promedio de TODAS las compras. Cuadra
+   mientras no cierres una posición y la vuelvas a abrir: si vendes todo y
+   meses después compras más caro, esa compra nueva encarecía el costo de lo
+   que ya habías vendido: la venta salía con pérdida donde Fintual muestra
+   ganancia (hito 0004). El resultado total no cambia; cambia cómo se reparte
+   entre realizado y no realizado.
 
    Sin DOM ni red: corre igual en el navegador y en Node. */
 
@@ -14,15 +21,44 @@ export const RESIDUO = 0.001
 
 const TIPOS_ACCION = new Set(['compra', 'venta', 'dividendo'])
 
+/* Costo promedio móvil de un activo. eventos: [{tipo, cantidad, usd}] en
+   orden cronológico. Cada compra suma acciones y costo; cada venta saca
+   acciones al costo promedio de ESE momento y lo que sobra o falta es la G/P
+   realizada. El costo que queda es el de lo que tienes hoy.
+
+   Un residuo de fracción (vendiste 1,9999 de 2) se descarta con su costo, sin
+   cargarlo a la venta: 0,0001 acciones no son una pérdida. Una venta de más
+   acciones de las que hay (falta una compra en la hoja) no inventa costo:
+   lo que sobra se vende a costo cero. */
+export function costoPromedioMovil(eventos) {
+  let acciones = 0, costo = 0, realizada = 0
+  for (const e of eventos) {
+    const cant = e.cantidad || 0
+    const usd = e.usd || 0
+    if (e.tipo === 'compra') { acciones += cant; costo += usd; continue }
+    if (e.tipo !== 'venta') continue
+    const prom = acciones > 0 ? costo / acciones : 0
+    const costoVendido = Math.min(cant, Math.max(acciones, 0)) * prom
+    realizada += usd - costoVendido
+    costo -= costoVendido
+    acciones -= cant
+    if (acciones < RESIDUO) { acciones = 0; costo = 0 }
+  }
+  return { acciones, costo, realizada, costoProm: acciones > 0 ? costo / acciones : 0 }
+}
+
 export function calcularCartera(datos) {
   const precios = new Map((datos.precios || []).map((p) => [p.ticker, p]))
   const porTicker = new Map()
+  // Orden cronológico estable: el costo móvil depende del orden. La API ya
+  // los manda así; se ordena igual por si otra fuente no lo hace.
+  const movs = [...(datos.movimientos || [])].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0))
 
-  for (const m of datos.movimientos || []) {
+  for (const m of movs) {
     if (!TIPOS_ACCION.has(m.tipo) || !m.ticker || m.ticker === 'USD') continue
     let p = porTicker.get(m.ticker)
     if (!p) {
-      p = { ticker: m.ticker, activo: m.activo, comprado: 0, invertido: 0, vendido: 0, ventas: 0, dividendos: 0, primera: m.fecha, ultima: m.fecha }
+      p = { ticker: m.ticker, activo: m.activo, comprado: 0, invertido: 0, vendido: 0, ventas: 0, dividendos: 0, primera: m.fecha, ultima: m.fecha, eventos: [] }
       porTicker.set(m.ticker, p)
     }
     const cant = m.cantidad || 0
@@ -30,26 +66,26 @@ export function calcularCartera(datos) {
     if (m.tipo === 'compra') { p.comprado += cant; p.invertido += usd }
     if (m.tipo === 'venta') { p.vendido += cant; p.ventas += usd }
     if (m.tipo === 'dividendo') p.dividendos += usd
+    else p.eventos.push({ tipo: m.tipo, cantidad: cant, usd })
     if (m.fecha < p.primera) p.primera = m.fecha
     if (m.fecha > p.ultima) p.ultima = m.fecha
   }
 
   const posiciones = [...porTicker.values()]
     .sort((a, b) => (a.ticker < b.ticker ? -1 : 1))
-    .map((p) => {
+    .map(({ eventos, ...p }) => {
       const pr = precios.get(p.ticker)
-      const bruto = p.comprado - p.vendido
-      const tenencia = Math.abs(bruto) < RESIDUO ? 0 : bruto
-      const costoProm = p.comprado > 0 ? p.invertido / p.comprado : 0
+      const movil = costoPromedioMovil(eventos)
+      const tenencia = movil.acciones
+      const costoProm = movil.costoProm
       const precio = pr && typeof pr.precio === 'number' ? pr.precio : null
       const abierta = tenencia > RESIDUO
       const valor = precio !== null ? tenencia * precio : null
-      // Ventas − costo promedio de lo vendido. Con residuos de fracción (vendiste
-      // 1,9999 de 2) no se carga todo el costo a la venta.
-      const gpRealizada = p.ventas - p.vendido * costoProm
-      const gpNoRealizada = abierta && precio !== null ? valor - tenencia * costoProm : 0
+      const gpRealizada = movil.realizada
+      const gpNoRealizada = abierta && precio !== null ? valor - movil.costo : 0
       return {
         ...p,
+        costoAbierto: movil.costo,
         nombre: (pr && pr.nombre && pr.nombre !== p.ticker ? pr.nombre : '') || p.activo || p.ticker,
         tenencia,
         costoProm,

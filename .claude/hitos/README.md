@@ -12,6 +12,7 @@ repo es público.
 
 | # | Fecha | Título | Estado |
 |---|---|---|---|
+| [0004](0004-costo-promedio-movil.md) | 2026-09-27 | Costo promedio móvil (como Fintual) y correos leídos también en la papelera | falta pegar Code.gs |
 | [0003](0003-transiciones-e-interaccion.md) | 2026-09-27 | Transiciones e interacción: la página responde al tocarla | completado |
 | [0002](0002-backend-conectado.md) | 2026-09-27 | Backend conectado: la página lee la hoja real | completado |
 | [0001](0001-nace-gestor-acciones.md) | 2026-09-27 | Nace el Gestor de acciones: la hoja de Fintual como backend de una página | en curso |

@@ -40,9 +40,12 @@ Qué se hizo antes y por qué: `.claude/hitos/` (empieza por su `README.md`).
    validar contra datos reales, trabaja en el scratchpad, no en `tests/`.
 2. **El backend entrega hechos; el front calcula.** No agregues a `Api.gs`
    totales ni posiciones: rompe el contrato para cualquier otra plataforma.
-3. **`cartera.js` y `buildPosiciones` (Code.gs) calculan igual.** G/P realizada
-   = ventas − acciones vendidas × costo promedio. Si cambias una, cambia la
-   otra, o el dashboard y la hoja dejan de cuadrar.
+3. **`cartera.js` y `buildPosiciones` (Code.gs) calculan igual:** costo
+   promedio **móvil**, el que tenías el día de cada venta (así lo hace
+   Fintual). G/P realizada = lo recibido − las acciones vendidas × ese costo.
+   El promedio de todas las compras se equivoca al cerrar y reabrir una
+   posición (hito 0004). `tests/cartera.test.mjs` ejecuta la función de
+   `Code.gs` y la compara con `cartera.js`: si cambias una, cambia la otra.
 4. **El contrato cambia en cuatro sitios a la vez:** `Api.gs`,
    `docs/contrato.md`, `src/demo.js`, pruebas. `tests/contrato.test.mjs`
    atrapa la demo desalineada.

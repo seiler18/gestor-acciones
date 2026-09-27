@@ -72,3 +72,50 @@ test('totales del resultado = realizada + no realizada + dividendos, en USD y CL
   assert.deepEqual(c.abiertas.map((p) => p.ticker), ['A'])
   assert.deepEqual(c.cerradas.map((p) => p.ticker), ['B'])
 })
+
+test('cerrar y reabrir: la compra nueva no encarece lo ya vendido (costo móvil)', () => {
+  // Compra 1 a 10, vende todo a 11 (+1). Meses después compra 2 a 15 y hoy vale 14.
+  // Con el promedio de todas las compras (40/3) la venta daba −2,33 y la
+  // posición nueva ganancia: justo al revés de lo que dice Fintual.
+  const c = calcularCartera({
+    precios: [{ ticker: 'ETF', precio: 14 }],
+    movimientos: [mov('2025-08-01', 'compra', 'ETF', 1, 10), mov('2025-11-01', 'venta', 'ETF', 1, 11), mov('2026-08-01', 'compra', 'ETF', 2, 30)],
+  })
+  const p = c.posiciones[0]
+  cerca(p.gpRealizada, 1, 'realizada')
+  cerca(p.costoProm, 15, 'costo promedio de lo que se tiene')
+  cerca(p.gpNoRealizada, 28 - 30, 'no realizada')
+  cerca(p.resultado, -1, 'el total no cambia con el método')
+  cerca(p.invertido, 40, 'invertido sigue siendo la suma de compras')
+})
+
+test('el costo móvil depende del orden, no del orden en que llegan los datos', () => {
+  const movs = [mov('2026-03-01', 'venta', 'X', 1, 30), mov('2026-01-01', 'compra', 'X', 1, 10), mov('2026-02-01', 'compra', 'X', 1, 20)]
+  cerca(calcularCartera({ precios: [], movimientos: movs }).posiciones[0].gpRealizada, 30 - 15, 'venta al promedio de las dos compras previas')
+})
+
+/* Regla 3 del CLAUDE.md: la hoja y la página calculan igual. Se ejecuta la
+   función de backend/Code.gs en Node y se compara con cartera.js. */
+test('Code.gs (costoPromedioMovil_) calcula lo mismo que cartera.js', async () => {
+  const fs = await import('node:fs')
+  const vm = await import('node:vm')
+  const ctx = vm.createContext({})
+  vm.runInContext(fs.readFileSync(new URL('../backend/Code.gs', import.meta.url), 'utf8'), ctx)
+  const casos = [
+    [['01/08/2025', 'Compra acción', 'a', 'ETF', 1, 10], [new Date('2025-11-01T12:00:00Z'), 'Venta acción', 'a', 'ETF', 1, 11], ['01/08/2026', 'Compra acción', 'a', 'ETF', '2', '30']],
+    [['01/01/2026', 'Compra acción', 'a', 'VOO', 1, 100], ['01/02/2026', 'Compra acción', 'a', 'VOO', 1, 110], ['01/03/2026', 'Venta acción', 'a', 'VOO', '0,5', '60'], ['10/03/2026', 'Dividendo', 'a', 'VOO', '', 1.5]],
+    [['01/01/2026', 'Compra acción', 'a', 'ABC', 2, 40], ['01/02/2026', 'Venta acción', 'a', 'ABC', 1.9999, 41]],
+  ]
+  const tipo = { 'Compra acción': 'compra', 'Venta acción': 'venta', Dividendo: 'dividendo' }
+  const iso = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v.split('/').reverse().join('-'))
+  const num = (v) => (typeof v === 'number' ? v : Number(String(v).replace(',', '.')) || 0)
+  for (const filas of casos) {
+    const hoja = vm.runInContext('costoPromedioMovil_', ctx)(filas)
+    const web = calcularCartera({ precios: [], movimientos: filas.map((r) => mov(iso(r[0]), tipo[r[1]], r[3], num(r[4]), num(r[5]))) })
+    for (const p of web.posiciones) {
+      cerca(hoja[p.ticker].realizada, p.gpRealizada, `${p.ticker} realizada`)
+      cerca(hoja[p.ticker].costoProm, p.costoProm, `${p.ticker} costo promedio`)
+      cerca(hoja[p.ticker].acciones, p.tenencia, `${p.ticker} tenencia`)
+    }
+  }
+})

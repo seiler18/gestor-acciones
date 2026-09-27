@@ -314,8 +314,70 @@ function actualizarPrecios(ss) {
   return ok;
 }
 
+/* Costo promedio MÓVIL por ticker, el que tenías al momento de cada venta
+   (así lo calcula Fintual). filas: Movimientos A:F [fecha, tipo, activo,
+   ticker, cantidad, usd]. Devuelve { ticker: { acciones, costo, realizada,
+   costoProm } }.
+
+   Es la misma cuenta que costoPromedioMovil() de src/lib/cartera.js, y
+   tests/cartera.test.mjs ejecuta esta función en Node y compara las dos: si
+   cambias una, cambia la otra.
+
+   Hasta el 2026-09-27 la hoja usaba el promedio de TODAS las compras con
+   SUMIFS. Cuadra mientras no se cierre una posición y se vuelva a abrir: al
+   vender todo y comprar de nuevo más caro, la compra nueva encarecía lo ya
+   vendido y la venta salía con pérdida donde Fintual muestra ganancia. */
+var RESIDUO_ACC = 0.001;
+function costoPromedioMovil_(filas) {
+  var evs = [];
+  for (var i = 0; i < filas.length; i++) {
+    var r = filas[i];
+    var tipo = String(r[1]).trim();
+    if (tipo !== 'Compra acción' && tipo !== 'Venta acción') continue;
+    var tk = String(r[3] || '').trim();
+    var t = claveFecha_(r[0]);
+    if (!tk || tk === 'USD' || t === null) continue;
+    evs.push({ t: t, i: i, tk: tk, compra: tipo === 'Compra acción', cant: numeroHoja_(r[4]), usd: numeroHoja_(r[5]) });
+  }
+  // Cronológico y estable: a igual fecha, el orden de la hoja.
+  evs.sort(function (a, b) { return a.t - b.t || a.i - b.i; });
+  var out = {};
+  evs.forEach(function (e) {
+    var p = out[e.tk] || (out[e.tk] = { acciones: 0, costo: 0, realizada: 0, costoProm: 0 });
+    if (e.compra) { p.acciones += e.cant; p.costo += e.usd; }
+    else {
+      var prom = p.acciones > 0 ? p.costo / p.acciones : 0;
+      var costoVendido = Math.min(e.cant, Math.max(p.acciones, 0)) * prom;
+      p.realizada += e.usd - costoVendido;
+      p.costo -= costoVendido;
+      p.acciones -= e.cant;
+      // Residuo de fracción (vendiste 1,9999 de 2): se descarta con su costo.
+      if (p.acciones < RESIDUO_ACC) { p.acciones = 0; p.costo = 0; }
+    }
+    p.costoProm = p.acciones > 0 ? p.costo / p.acciones : 0;
+  });
+  return out;
+}
+// Fecha de la hoja → número para ordenar. La columna A mezcla Date (lo
+// importado) y texto dd/mm/aaaa (lo cargado a mano).
+function claveFecha_(v) {
+  if (v && typeof v.getTime === 'function') return v.getTime();
+  var m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : null;
+}
+function numeroHoja_(v) {
+  if (typeof v === 'number') return v;
+  // «1.234,5» (es-CL) o «1234.5»: los puntos son de miles solo si hay coma.
+  var t = String(v || '').trim();
+  if (t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.');
+  var n = Number(t);
+  return isFinite(n) ? n : 0;
+}
+
 function buildPosiciones(ss) {
   var S = S_();
+  var mvHoja = ss.getSheetByName('Movimientos');
+  var movil = mvHoja && mvHoja.getLastRow() > 1 ? costoPromedioMovil_(mvHoja.getRange(2, 1, mvHoja.getLastRow() - 1, 6).getValues()) : {};
   var s = sheet_(ss, 'Posiciones', 3);
   s.appendRow([
     'Ticker',
@@ -351,18 +413,18 @@ function buildPosiciones(ss) {
     s.getRange(row, 7).setFormula(
       '=IF(ABS(C' + row + '-E' + row + ')<' + dec + S + '0' + S + 'C' + row + '-E' + row + ')',
     );
-    s.getRange(row, 8).setFormula('=IF(C' + row + '>0' + S + 'D' + row + '/C' + row + S + '0)');
+    // H y K son valores, no fórmulas: el costo móvil necesita recorrer las
+    // compras y ventas en orden, y eso no se expresa con SUMIFS. Se recalculan
+    // cada vez que corre la tarea (reconstruirDerivadas).
+    var mv = movil[tks[r]] || { costoProm: 0, realizada: 0 };
+    s.getRange(row, 8).setValue(mv.costoProm);
     s.getRange(row, 9).setFormula(
       '=IFERROR(VLOOKUP(A' + row + S + 'Precios!$A$2:$C$5000' + S + '3' + S + 'FALSE)' + S + '"")',
     );
     s.getRange(row, 10).setFormula('=IF(ISNUMBER(I' + row + ')' + S + 'G' + row + '*I' + row + S + '"")');
-    // G/P realizada = ventas − acciones vendidas × costo promedio; no realizada =
-    // valor − tenencia × costo promedio. Son las fórmulas del código que corre en
-    // la hoja (verificado contra él el 2026-09-27). Una variante que circuló en
-    // Drive (ventas − invertido si la tenencia es residual) cargaba todo el costo
-    // a lo vendido con un residuo de 0,0001 acciones. src/lib/cartera.js calcula
-    // lo mismo; si cambias una, cambia la otra.
-    s.getRange(row, 11).setFormula('=F' + row + '-(E' + row + '*H' + row + ')');
+    // G/P realizada: la del costo móvil (costoPromedioMovil_). No realizada =
+    // valor − tenencia × costo promedio de lo que tienes hoy.
+    s.getRange(row, 11).setValue(mv.realizada);
     s.getRange(row, 12).setFormula('=IF(ISNUMBER(I' + row + ')' + S + 'J' + row + '-(G' + row + '*H' + row + ')' + S + '"")');
     s.getRange(row, 13).setFormula('=SUMIFS(' + U + S + A + S + 'A' + row + S + B + S + '"Dividendo")');
   }
@@ -813,7 +875,12 @@ function leerCorreosFintual(ss) {
     var p = String(desde).split('/');
     corte = p.length === 3 ? new Date(p[2], p[1] - 1, p[0]) : new Date(2026, 5, 4);
   }
-  var q = 'from:hola@fintual.com after:' + Utilities.formatDate(corte, ss.getSpreadsheetTimeZone(), 'yyyy/MM/dd');
+  // in:anywhere: FinanzasMaker lee estos mismos correos cada hora y, tras
+  // anotarlos, los manda a la papelera; sin esto el gestor (que corre cada 8 h)
+  // ya no los encontraba. La papelera se vacía a los 30 días: mientras la
+  // tarea corra más seguido que eso, no se pierde ninguno. Lo ya importado se
+  // salta por ID de correo (columna K).
+  var q = 'in:anywhere from:hola@fintual.com after:' + Utilities.formatDate(corte, ss.getSpreadsheetTimeZone(), 'yyyy/MM/dd');
 
   // IDs ya importados
   var yaIds = {};

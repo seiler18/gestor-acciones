@@ -207,16 +207,72 @@ function tile(etiqueta, valor, { nota = '', clase = '', cuenta = null, formato =
   </button>`
 }
 
+/* Las tres partes del resultado. Cada una se abre en su desglose por activo
+   (abrirParte). `campo` es el de cada posición en calcularCartera. */
+const PARTES = {
+  realizado: {
+    nombre: 'Ganancia realizada', campo: 'gpRealizada', nota: 'de lo que ya vendiste',
+    explica: 'Lo que recibiste al vender menos lo que te habían costado esas acciones, al costo promedio que tenías el día de cada venta. Es como lo calcula Fintual.',
+  },
+  noRealizado: {
+    nombre: 'Ganancia no realizada', campo: 'gpNoRealizada', nota: 'de lo que tienes hoy',
+    explica: 'Lo que valen hoy tus acciones menos lo que te costaron. Cambia con el precio: se vuelve realizada recién cuando vendes.',
+  },
+  dividendos: {
+    nombre: 'Dividendos', campo: 'dividendos', nota: 'lo que te pagaron',
+    explica: 'Los pagos que te hicieron las empresas y fondos por tener sus acciones.',
+  },
+}
+
+// «hace 3 h»: qué tan viejo es el precio. La hoja lo trae de Yahoo Finance
+// cada vez que corre (cada 8 h por defecto), y por eso puede no calzar con
+// el que ves en Fintual en este minuto.
+function edadPrecios(precios) {
+  const t = (precios || []).map((p) => p.actualizado).filter(Boolean).sort().pop()
+  if (!t) return ''
+  // Sin «Z»: la hoja manda su hora local sin zona, y el navegador del dueño
+  // está en la misma (Chile). Leerla como UTC la corría 3 o 4 horas.
+  const min = Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 60000))
+  if (!isFinite(min)) return ''
+  if (min < 2) return 'Precios recién actualizados'
+  if (min < 60) return `Precios de hace ${min} min`
+  const h = Math.round(min / 60)
+  return h < 48 ? `Precios de hace ${h} h` : `Precios de hace ${Math.round(h / 24)} días`
+}
+
 function resumen(c) {
   const t = c.totales
+  const valores = { realizado: t.gpRealizada, noRealizado: t.gpNoRealizada, dividendos: t.dividendos }
+  const max = Math.max(...Object.values(valores).map(Math.abs), 0) || 1
+  const edad = edadPrecios(estado.datos.precios)
+  const sobreInvertido = t.invertido > 0 ? t.resultado / t.invertido : null
+  const parte = (k) => {
+    const v = valores[k]
+    return html`<button type="button" class="parte parte-${dir(v)}" data-parte="${k}" aria-haspopup="dialog">
+      <span class="parte-etq">${PARTES[k].nombre}<span class="parte-chev" aria-hidden="true">›</span></span>
+      <span class="parte-val ${dir(v)}" data-cuenta="${v}" data-formato="usdSigno">${fUsdSigno(v)}</span>
+      <span class="parte-nota">${PARTES[k].nota}</span>
+      <span class="parte-pista" aria-hidden="true"><span class="parte-barra ${v < 0 ? 'barra-neg' : 'barra-pos'}" data-w="${(Math.abs(v) / max).toFixed(4)}"></span></span>
+    </button>`
+  }
   return html`<section class="resumen revela" aria-labelledby="h-resumen">
-    <div class="hero">
-      <h2 id="h-resumen" class="hero-etq">Resultado total de la cartera</h2>
+    <div class="hero hero-${dir(t.resultado)}">
+      <div class="hero-cab">
+        <h2 id="h-resumen" class="hero-etq">Resultado total de la cartera</h2>
+        ${edad ? html`<p class="hero-precios" title="La hoja trae los precios de Yahoo Finance cada vez que corre; Fintual puede mostrar uno más reciente"><span class="punto" aria-hidden="true"></span>${edad}</p>` : ''}
+      </div>
       <p class="hero-cifra ${dir(t.resultado)}" data-cuenta="${t.resultado}" data-formato="usdSigno">${fUsdSigno(t.resultado)}</p>
       <p class="hero-sub">
-        ${t.resultadoClp !== null ? html`≈ ${fClpSigno(t.resultadoClp)} al dólar de hoy · ` : ''}
-        realizado ${fUsdSigno(t.gpRealizada)} · no realizado ${fUsdSigno(t.gpNoRealizada)} · dividendos ${fUsd(t.dividendos)}
+        ${sobreInvertido !== null ? html`<span class="hero-pct ${dir(t.resultado)}">${fPctSigno(sobreInvertido)}</span> sobre lo invertido` : ''}
+        ${t.resultadoClp !== null ? html`<span class="hero-clp">≈ ${fClpSigno(t.resultadoClp)} al dólar de hoy</span>` : ''}
       </p>
+      <div class="partes" aria-label="De dónde sale el resultado. Toca una parte para ver cada activo">
+        ${parte('realizado')}
+        <span class="partes-op" aria-hidden="true">+</span>
+        ${parte('noRealizado')}
+        <span class="partes-op" aria-hidden="true">+</span>
+        ${parte('dividendos')}
+      </div>
     </div>
     <div class="tiles">
       ${tile('Valor de la cartera hoy', fUsd(t.valorCartera), { nota: `${c.abiertas.length} posición${c.abiertas.length === 1 ? '' : 'es'} abierta${c.abiertas.length === 1 ? '' : 's'}`, cuenta: t.valorCartera, formato: 'usd', ir: 'h-cartera' })}
@@ -510,6 +566,8 @@ function conectarSecciones() {
   app.addEventListener('click', (e) => {
     const t = e.target.closest('.tile[data-ir]')
     if (t) return irA(t.dataset.ir, t.dataset.filtroIr)
+    const pt = e.target.closest('[data-parte]')
+    if (pt) return abrirParte(pt.dataset.parte)
     const o = e.target.closest('[data-orden]')
     if (o) return ordenarCartera(o.dataset.orden)
     const col = e.target.closest('#graf-div .col')
@@ -539,13 +597,50 @@ function irA(id, filtro) {
   sec.classList.add('destello')
 }
 
+/* ===== desglose de una parte del resultado ===== */
+
+function abrirParte(k) {
+  const def = PARTES[k]
+  const c = estado.calculo
+  const total = { realizado: c.totales.gpRealizada, noRealizado: c.totales.gpNoRealizada, dividendos: c.totales.dividendos }[k]
+  const filas = c.posiciones.filter((p) => Math.abs(p[def.campo]) >= 0.005).sort((a, b) => b[def.campo] - a[def.campo])
+  const max = Math.max(...filas.map((p) => Math.abs(p[def.campo])), 0) || 1
+  const dlg = $('#dlg-activo')
+  pintar(dlg, html`<div class="det">
+    <span class="det-asa" aria-hidden="true"></span>
+    <header class="det-cab">
+      <div>
+        <p class="det-estado"><span class="chip">Resultado total</span></p>
+        <h2 id="det-titulo">${def.nombre}</h2>
+      </div>
+      <button type="button" class="btn btn-icono" data-cerrar aria-label="Cerrar">×</button>
+    </header>
+    <p class="det-cifra ${dir(total)}" data-cuenta="${total}" data-formato="usdSigno">${fUsdSigno(total)}</p>
+    <p class="det-explica">${def.explica}</p>
+    ${filas.length ? html`<h3 class="det-sub-tit">Por activo <small>toca uno para ver su detalle</small></h3>
+      <ul class="desglose">${filas.map((p) => {
+        const v = p[def.campo]
+        return html`<li><button type="button" class="desglose-fila" data-ticker="${p.ticker}">
+          <span class="desglose-etq"><b>${p.ticker}</b><small>${p.nombre}</small></span>
+          <span class="desglose-pista" aria-hidden="true"><span class="mitad mitad-neg">${v < 0 ? html`<span class="barra barra-neg" data-w="${(Math.abs(v) / max).toFixed(4)}"></span>` : ''}</span><span class="mitad mitad-pos">${v >= 0 ? html`<span class="barra barra-pos" data-w="${(v / max).toFixed(4)}"></span>` : ''}</span></span>
+          <span class="desglose-val ${dir(v)}">${fUsdSigno(v)}</span>
+        </button></li>`
+      })}</ul>` : html`<p class="vacio">Ningún activo tiene ${def.nombre.toLowerCase()} por ahora.</p>`}
+  </div>`)
+  aplicarMedidas(dlg)
+  if (!dlg.open) dlg.showModal()
+  dlg.querySelectorAll('[data-cuenta]').forEach(contar)
+}
+
 /* ===== detalle de un activo ===== */
 
 function conectarDetalle() {
   const dlg = $('#dlg-activo')
   dlg.addEventListener('click', (e) => {
     // El clic en el velo cae en el propio <dialog>, fuera de su contenido.
-    if (e.target === dlg || e.target.closest('[data-cerrar]')) cerrarDialogo(dlg)
+    if (e.target === dlg || e.target.closest('[data-cerrar]')) return cerrarDialogo(dlg)
+    const a = e.target.closest('[data-ticker]')
+    if (a) abrirActivo(a.dataset.ticker)
   })
 }
 
@@ -553,7 +648,7 @@ function abrirActivo(ticker) {
   const p = estado.calculo.posiciones.find((x) => x.ticker === ticker)
   if (!p) return
   const movs = (estado.datos.movimientos || []).filter((m) => m.ticker === ticker).reverse()
-  const costoAbierto = p.tenencia * p.costoProm
+  const costoAbierto = p.costoAbierto
   const dlg = $('#dlg-activo')
   pintar(dlg, html`<div class="det">
     <span class="det-asa" aria-hidden="true"></span>

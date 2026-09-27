@@ -194,3 +194,144 @@ dialog.saliendo::backdrop { animation: velo-sale var(--dur-medio) var(--curva) b
   *, *::before, *::after, ::backdrop { animation: none !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
+
+/* ============================================================
+   RESULTADO TOTAL — la cifra grande y de dónde sale.
+   Realizado + no realizado + dividendos, cada uno en su tarjeta con su barra
+   (el largo es relativo a la mayor de las tres, para comparar de un vistazo)
+   y un «+» entre ellas: la suma se lee como suma.
+   ============================================================ */
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  gap: var(--e-2);
+  padding: var(--e-5);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--surface);
+  box-shadow: var(--sombra);
+}
+/* Un halo del color del resultado detrás de la cifra, no un fondo plano. */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% 40% 30% -10%;
+  z-index: -1;
+  background: radial-gradient(closest-side, var(--halo, var(--primario-tenue)), transparent);
+  animation: halo var(--ciclo-halo) ease-in-out infinite alternate;
+}
+.hero-sube { --halo: color-mix(in srgb, var(--texto-sube) 16%, transparent); }
+.hero-baja { --halo: color-mix(in srgb, var(--texto-baja) 16%, transparent); }
+@keyframes halo { to { transform: translate(8%, 6%) scale(1.08); } }
+
+.hero-cab { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--e-2) var(--e-4); }
+.hero-precios { display: inline-flex; align-items: center; gap: var(--e-2); font-size: var(--t-xs); color: var(--texto-tenue); padding: 2px var(--e-3); border-radius: 999px; background: var(--surface-2); cursor: help; }
+.punto { width: 8px; height: 8px; border-radius: 50%; background: var(--estado-bueno); animation: latido var(--ciclo-latido) ease-in-out infinite; }
+@keyframes latido { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.75); } }
+
+.hero-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--e-1) var(--e-4); margin-top: 0; font-size: var(--t-sm); color: var(--texto-2); }
+.hero-pct { font-weight: 650; font-size: var(--t-base); }
+.hero-clp { color: var(--texto-tenue); }
+
+.partes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--e-2);
+  margin-top: var(--e-3);
+}
+.partes-op { align-self: center; font-size: var(--t-xl); font-weight: 300; color: var(--texto-tenue); }
+.parte {
+  display: grid;
+  align-content: start;
+  gap: var(--e-1);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: var(--e-3) var(--e-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  transition: transform var(--dur-medio) var(--curva), border-color var(--dur-medio) var(--curva), background var(--dur-medio) var(--curva);
+}
+.parte-etq { display: flex; justify-content: space-between; gap: var(--e-2); font-size: var(--t-sm); color: var(--texto-2); font-weight: 600; }
+.parte-chev { color: var(--texto-tenue); font-size: var(--t-lg); line-height: 1; transition: transform var(--dur-medio) var(--resorte), color var(--dur-medio) var(--curva); }
+.parte-val { font-size: var(--t-xl); font-weight: 650; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.parte-nota { font-size: var(--t-xs); color: var(--texto-tenue); }
+.parte-pista { height: 6px; margin-top: var(--e-1); border-radius: 999px; background: var(--surface); overflow: hidden; }
+.parte-barra { display: block; height: 100%; width: calc(var(--w, 0) * 100%); border-radius: 999px; transition: width var(--dur-barra) var(--curva); }
+.parte:active { transform: scale(0.98); }
+@media (hover: hover) {
+  .parte:hover { transform: translateY(-3px); border-color: var(--primario); background: var(--surface); }
+  .parte:hover .parte-chev { color: var(--primario); transform: translateX(3px); }
+}
+
+/* Entran en cadena y sus barras crecen, como los mosaicos. */
+.revela .parte, .revela .partes-op {
+  opacity: 0;
+  transform: translateY(calc(var(--desplaza) / 2));
+  transition: opacity var(--dur-entra) var(--curva), transform var(--dur-entra) var(--curva), border-color var(--dur-medio) var(--curva), background var(--dur-medio) var(--curva);
+}
+.revela.visible .parte, .revela.visible .partes-op { opacity: 1; transform: none; }
+.revela.visible .partes > :nth-child(2) { transition-delay: var(--escalon), var(--escalon), var(--sin-espera), var(--sin-espera); }
+.revela.visible .partes > :nth-child(3) { transition-delay: calc(var(--escalon) * 2), calc(var(--escalon) * 2), var(--sin-espera), var(--sin-espera); }
+.revela.visible .partes > :nth-child(4) { transition-delay: calc(var(--escalon) * 3), calc(var(--escalon) * 3), var(--sin-espera), var(--sin-espera); }
+.revela.visible .partes > :nth-child(5) { transition-delay: calc(var(--escalon) * 4), calc(var(--escalon) * 4), var(--sin-espera), var(--sin-espera); }
+.revela:not(.visible) .parte-barra { width: 0; }
+.revela.visible .parte-barra { transition-delay: calc(var(--escalon) * 5); }
+
+/* ---------- Desglose de una parte, por activo ---------- */
+.det-explica { font-size: var(--t-sm); color: var(--texto-2); padding: var(--e-3) var(--e-4); border-radius: var(--radio-sm); background: var(--surface-2); }
+.desglose { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.desglose-fila {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 9rem) 1fr minmax(5.5rem, auto);
+  align-items: center;
+  gap: var(--e-3);
+  padding: var(--e-2);
+  border: 0;
+  border-radius: var(--radio-sm);
+  background: none;
+  font: inherit;
+  font-size: var(--t-sm);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--curva);
+}
+@media (hover: hover) { .desglose-fila:hover { background: var(--surface-2); } }
+.desglose-etq { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.desglose-etq small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.desglose-pista { display: grid; grid-template-columns: 1fr 1fr; height: 14px; }
+.desglose-val { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.desglose .barra { animation: crece var(--dur-barra) var(--curva) both; animation-delay: calc(var(--escalon) * 2); }
+.desglose .barra-pos { transform-origin: left center; }
+.desglose .barra-neg { transform-origin: right center; }
+.desglose li { animation: aparece var(--dur-entra) var(--curva) both; }
+.desglose li:nth-child(2) { animation-delay: calc(var(--escalon) * 0.5); }
+.desglose li:nth-child(3) { animation-delay: var(--escalon); }
+.desglose li:nth-child(n+4) { animation-delay: calc(var(--escalon) * 1.5); }
+
+@media (max-width: 40rem) {
+  .hero { padding: var(--e-4); }
+  /* En el celular las tres partes van una bajo otra y el «+» queda entre
+     ellas, centrado: la suma se sigue leyendo de arriba abajo. */
+  .partes { grid-template-columns: minmax(0, 1fr); gap: var(--e-1); }
+  .partes-op { justify-self: center; font-size: var(--t-lg); line-height: 1; }
+  .parte { grid-template-columns: 1fr auto; column-gap: var(--e-3); }
+  .parte-etq { grid-column: 1 / -1; }
+  .parte-val { font-size: var(--t-lg); }
+  .parte-nota { align-self: center; text-align: right; }
+  .parte-pista { grid-column: 1 / -1; }
+  .desglose-fila { grid-template-columns: 4.5rem 1fr auto; gap: var(--e-2); }
+  .desglose-etq small { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revela .parte, .revela .partes-op { opacity: 1; transform: none; }
+  .hero::before, .punto { animation: none; }
+}

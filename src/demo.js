@@ -64,7 +64,10 @@ const PRECIOS = [
 ]
 
 export function datosDemo(ahora = new Date()) {
-  const iso = ahora.toISOString().slice(0, 19)
+  // Hora local sin zona, como la manda la hoja (docs/contrato.md): con
+  // toISOString() la demo decía «precios de hace 3 h» recién cargada.
+  const dos = (n) => String(n).padStart(2, '0')
+  const iso = `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())}T${dos(ahora.getHours())}:${dos(ahora.getMinutes())}:${dos(ahora.getSeconds())}`
   return {
     ok: true,
     version: 1,
