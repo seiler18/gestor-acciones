@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestor de acciones</title>
+    <meta name="description" content="Dashboard de una cartera de acciones: posiciones, resultados, dividendos y movimientos, sobre una hoja de Google que lee los correos de la corredora.">
+    <meta name="referrer" content="no-referrer">
+    <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  </head>
+  <body>
+    <header class="cabecera">
+      <div class="cabecera-in">
+        <h1 class="marca">Gestor de acciones</h1>
+        <p id="estado" class="estado" role="status">Cargando…</p>
+        <button type="button" id="btn-acceso" class="btn" hidden>Entrar con clave</button>
+      </div>
+    </header>
+
+    <main id="app" class="contenido">
+      <noscript>Esta página necesita JavaScript para mostrar el dashboard.</noscript>
+    </main>
+
+    <footer class="pie">
+      <p>
+        Los datos salen de una hoja de Google que lee los correos de Fintual; los precios, de Yahoo Finance con
+        algunos minutos de retraso. Es un registro personal, no asesoría financiera.
+      </p>
+      <p><a href="https://github.com/seiler18/gestor-acciones" rel="noopener">Código en GitHub</a></p>
+    </footer>
+
+    <dialog id="dlg-clave" aria-labelledby="dlg-titulo">
+      <form id="form-clave" novalidate>
+        <h2 id="dlg-titulo">Entrar con tu clave</h2>
+        <p class="dlg-ayuda">La generas en la hoja: menú <b>Fintual → Generar clave del dashboard web</b>.</p>
+        <label for="clave">Clave</label>
+        <input id="clave" name="clave" type="password" autocomplete="current-password" spellcheck="false" required>
+        <label class="check"><input type="checkbox" name="recordar"> Recordar en este dispositivo</label>
+        <p id="clave-error" class="error" role="alert" hidden></p>
+        <div class="dlg-acciones">
+          <button type="button" id="btn-cancelar" class="btn btn-sec">Cancelar</button>
+          <button type="submit" class="btn btn-pri">Entrar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="tip" class="tip" role="tooltip" hidden></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

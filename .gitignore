@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.vscode/
+*.log
+
+# Nunca: exportaciones de la planilla ni volcados del contrato real. Traen el
+# historial de operaciones y montos, y el repo es público.
+*.xlsx
+*.csv
+tests/privado/
+contrato*.json
+.env*
+
+# Ajustes de Claude Code de esta máquina (los del repo van en .claude/settings.json).
+.claude/settings.local.json
+
+# Copias del script tal como corre en la hoja: traen el historial real embebido.
+# La fuente versionada es backend/Code.gs (con la semilla vacía).
+backend/*_Original.gs
+backend/*.original.*

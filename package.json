@@ -1,0 +1,19 @@
+{
+  "name": "gestor-acciones",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "check": "node scripts/check.js",
+    "build": "npm run check && vite build",
+    "preview": "vite preview",
+    "test": "node --test \"tests/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  }
+}
