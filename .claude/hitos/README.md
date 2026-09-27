@@ -12,4 +12,5 @@ repo es público.
 
 | # | Fecha | Título | Estado |
 |---|---|---|---|
+| [0002](0002-backend-conectado.md) | 2026-09-27 | Backend conectado: la página lee la hoja real | completado |
 | [0001](0001-nace-gestor-acciones.md) | 2026-09-27 | Nace el Gestor de acciones: la hoja de Fintual como backend de una página | en curso |
