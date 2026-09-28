@@ -4,9 +4,9 @@ Dashboard web de una cartera de acciones: posiciones abiertas, resultado por
 activo, dividendos por mes, cambio de dólares, alertas y movimientos.
 
 El backend es una **hoja de Google** que lee sola los correos de la corredora
-(Fintual): cada 8 horas importa compras, ventas y dividendos, actualiza los
-precios y avisa por correo si algo cruza un umbral. Esta página lee esa hoja a
-través de una API de solo lectura en Apps Script.
+(Fintual): cada hora importa compras, ventas y dividendos y actualiza los
+precios; cada 4 horas avisa por correo si algo cruza un umbral. Esta página
+lee esa hoja a través de una API de solo lectura en Apps Script.
 
 **En vivo:** https://seiler18.github.io/gestor-acciones/. Sin clave muestra
 una cartera de ejemplo con montos inventados.

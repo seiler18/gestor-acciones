@@ -225,7 +225,7 @@ const PARTES = {
 }
 
 // «hace 3 h»: qué tan viejo es el precio. La hoja lo trae de Yahoo Finance
-// cada vez que corre (cada 8 h por defecto), y por eso puede no calzar con
+// cada vez que corre (cada hora por defecto), y por eso puede no calzar con
 // el que ves en Fintual en este minuto.
 function edadPrecios(precios) {
   const t = (precios || []).map((p) => p.actualizado).filter(Boolean).sort().pop()

@@ -98,6 +98,7 @@ function onOpen() {
     .addItem('Leer correos nuevos ahora', 'leerCorreosManual')
     .addItem('Actualizar precios ahora', 'actualizarPreciosManual')
     .addItem('Actualizar y revisar alertas', 'tareaProgramada')
+    .addItem('Aplicar horarios de Configuración', 'aplicarHorarios')
     .addSeparator()
     .addItem('Generar clave del dashboard web', 'generarClaveApi')
     .addToUi();
@@ -138,10 +139,18 @@ function configurarTodo() {
   );
 }
 
+// Todo de una vez: lo usa el menú «Actualizar y revisar alertas».
 function tareaProgramada() {
+  actualizarProgramado();
+  checkAlerts();
+}
+// Los triggers (ver setupTrigger): datos cada hora, alertas cada 4 h.
+function actualizarProgramado() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   leerCorreosFintual(ss);
   reconstruirDerivadas(ss);
+}
+function alertasProgramadas() {
   checkAlerts();
 }
 function leerCorreosManual() {
@@ -817,22 +826,23 @@ function buildDashboard(ss) {
 function buildConfig(ss) {
   var s = sheet_(ss, 'Configuración', 6);
   var email = Session.getActiveUser().getEmail();
-  s.getRange(1, 1, 10, 2).setValues([
+  s.getRange(1, 1, 11, 2).setValues([
     ['CONFIGURACIÓN', ''],
     ['', ''],
     ['Parámetro', 'Valor'],
     ['Email para alertas', email],
     ['VENDER si la ganancia supera (%) — solo activos que tienes', 5],
     ['COMPRAR si cae hoy más de (%) — caída brusca del día', 3],
-    ['Trigger cada (horas)', 8],
+    [ROTULO_HORAS_DATOS, 1],
     ['Importar correos desde (dd/mm/aaaa)', '04/06/2026'],
     ['Última ejecución', ''],
     ['Correos leídos (total)', 0],
+    [ROTULO_HORAS_ALERTAS, 4],
   ]);
   s.getRange(3, 1, 1, 2).setFontWeight('bold').setBackground('#2E5496').setFontColor('white');
   s.getRange(1, 1).setFontWeight('bold').setFontSize(13);
-  s.getRange(5, 2, 2, 1).setBackground('#FFF2CC');
-  s.getRange(8, 2).setBackground('#FFF2CC');
+  s.getRange(5, 2, 4, 1).setBackground('#FFF2CC');
+  s.getRange(11, 2).setBackground('#FFF2CC');
   s.setColumnWidth(1, 520);
   s.setColumnWidth(2, 170);
 }
@@ -845,18 +855,57 @@ function buildAlertas(ss) {
   s.setFrozenRows(1);
 }
 
+/* Dos tareas con ritmo propio (Configuración, filas 7 y 11):
+   - actualizarProgramado, cada 1 h: correos + precios + hojas derivadas. Con
+     8 h los precios quedaban de antes de la apertura y la G/P no realizada no
+     calzaba con la que muestra Fintual en ese momento.
+   - alertasProgramadas, cada 4 h: revisa señales y avisa por correo. Usa los
+     precios que dejó la última actualización (a lo más 1 h de antigüedad).
+   Hasta el 2026-09-28 una sola tarea hacía todo cada 8 h; la fila 7 se
+   migra sola la primera vez. */
+var ROTULO_HORAS_DATOS = 'Actualizar correos y precios cada (horas)';
+var ROTULO_HORAS_ALERTAS = 'Revisar alertas y avisar por correo cada (horas)';
+var HORAS_VALIDAS = [1, 2, 4, 6, 8, 12]; // lo único que acepta everyHours()
+
+function horas_(v, porDefecto) {
+  v = Number(v);
+  return HORAS_VALIDAS.indexOf(v) >= 0 ? v : porDefecto;
+}
+
 function setupTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     var h = t.getHandlerFunction();
-    if (h === 'checkAlerts' || h === 'tareaProgramada') ScriptApp.deleteTrigger(t);
+    if (h === 'checkAlerts' || h === 'tareaProgramada' || h === 'actualizarProgramado' || h === 'alertasProgramadas')
+      ScriptApp.deleteTrigger(t);
   });
   var cfg = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Configuración');
-  var horas = 8;
+  var hDatos = 1,
+    hAlertas = 4;
   if (cfg) {
-    var v = cfg.getRange(7, 2).getValue();
-    if (v) horas = v;
+    if (String(cfg.getRange(7, 1).getValue()) === 'Trigger cada (horas)') {
+      cfg.getRange(7, 1, 1, 2).setValues([[ROTULO_HORAS_DATOS, 1]]);
+    }
+    if (!cfg.getRange(11, 1).getValue()) {
+      cfg.getRange(11, 1, 1, 2).setValues([[ROTULO_HORAS_ALERTAS, 4]]);
+      cfg.getRange(11, 2).setBackground('#FFF2CC');
+    }
+    hDatos = horas_(cfg.getRange(7, 2).getValue(), 1);
+    hAlertas = horas_(cfg.getRange(11, 2).getValue(), 4);
   }
-  ScriptApp.newTrigger('tareaProgramada').timeBased().everyHours(horas).create();
+  ScriptApp.newTrigger('actualizarProgramado').timeBased().everyHours(hDatos).create();
+  ScriptApp.newTrigger('alertasProgramadas').timeBased().everyHours(hAlertas).create();
+  return { datos: hDatos, alertas: hAlertas };
+}
+
+function aplicarHorarios() {
+  var h = setupTrigger();
+  SpreadsheetApp.getUi().alert(
+    'Tareas reprogramadas.\n\n• Correos y precios: cada ' +
+      h.datos +
+      ' h\n• Alertas por correo: cada ' +
+      h.alertas +
+      ' h\n\nPara cambiarlas, edita las filas 7 y 11 de Configuración (1, 2, 4, 6, 8 o 12) y vuelve a usar esta opción.',
+  );
 }
 
 /* ===== LECTOR DE CORREOS FINTUAL ===== */
@@ -876,7 +925,7 @@ function leerCorreosFintual(ss) {
     corte = p.length === 3 ? new Date(p[2], p[1] - 1, p[0]) : new Date(2026, 5, 4);
   }
   // in:anywhere: FinanzasMaker lee estos mismos correos cada hora y, tras
-  // anotarlos, los manda a la papelera; sin esto el gestor (que corre cada 8 h)
+  // anotarlos, los manda a la papelera; sin esto el gestor (que antes corría cada 8 h)
   // ya no los encontraba. La papelera se vacía a los 30 días: mientras la
   // tarea corra más seguido que eso, no se pierde ninguno. Lo ya importado se
   // salta por ID de correo (columna K).
@@ -1103,7 +1152,6 @@ function checkAlerts() {
   var email = cfg.getRange(4, 2).getValue();
   var sellPct = Number(cfg.getRange(5, 2).getValue()) || 5;
   var buyPct = Number(cfg.getRange(6, 2).getValue()) || 3;
-  cfg.getRange(9, 2).setValue(new Date());
 
   var nP = pos.getLastRow() - 2;
   var nR = pre.getLastRow() - 1;
