@@ -88,6 +88,18 @@
       </form>
     </dialog>
 
+    <!-- Cinta de navegación inferior: solo se ve en el celular (app.css). Cada
+         botón lleva a una sección de la página; main.js (conectarNavegacion)
+         marca la que está a la vista. -->
+    <nav id="nav-inferior" class="pestanas" aria-label="Secciones">
+      <button type="button" class="pestana" data-nav="h-resumen"><span class="pestana-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span><span class="pestana-etq">Resumen</span></button>
+      <button type="button" class="pestana" data-nav="h-cartera"><span class="pestana-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect x="2" y="6" width="20" height="14" rx="2"/></svg></span><span class="pestana-etq">Cartera</span></button>
+      <button type="button" class="pestana" data-nav="h-resultado"><span class="pestana-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg></span><span class="pestana-etq">Resultado</span></button>
+      <button type="button" class="pestana" data-nav="h-div"><span class="pestana-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M18.1 10.4A6 6 0 1 1 10.4 18.1"/><path d="M7 6h1v4"/></svg></span><span class="pestana-etq">Dividendos</span></button>
+      <button type="button" class="pestana" data-nav="h-alertas"><span class="pestana-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><span class="pestana-etq">Alertas</span></button>
+      <button type="button" class="pestana" data-nav="h-mov"><span class="pestana-icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg></span><span class="pestana-etq">Movim.</span></button>
+    </nav>
+
     <div id="tip" class="tip" role="tooltip" hidden></div>
     <script type="module" src="/src/main.js"></script>
   </body>

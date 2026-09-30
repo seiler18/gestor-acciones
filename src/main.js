@@ -47,6 +47,7 @@ async function iniciar() {
   activarTooltip(document.body, $('#tip'))
   conectarAcceso()
   conectarTema()
+  conectarNavegacion()
   conectarDetalle()
   const guardada = hayBackend() ? clave.get() : null
   if (guardada) await cargarReal(guardada)
@@ -188,6 +189,7 @@ function pintarTodo() {
   conectarMovimientos()
   conectarSecciones()
   revelarAlVer(app)
+  vigilarSecciones()
 }
 
 function avisoDemo() {
@@ -584,6 +586,40 @@ function conectarSecciones() {
     if (el.matches('.col')) elegirMesDividendo(Number(el.dataset.i))
     else abrirActivo(el.dataset.ticker)
   })
+}
+
+/* Cinta inferior (solo visible en el celular): cada botón lleva a su sección
+   con irA, y la sección que está a la vista queda marcada (aria-current). */
+function conectarNavegacion() {
+  $('#nav-inferior').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nav]')
+    if (b) irA(b.dataset.nav)
+  })
+}
+
+let observadorNav = null
+function vigilarSecciones() {
+  const botones = $$('#nav-inferior [data-nav]')
+  // Una sección puede no existir (sin posiciones no hay «Cartera actual»): su botón no se muestra.
+  const secciones = botones.map((b) => {
+    const sec = document.getElementById(b.dataset.nav)?.closest('section')
+    b.hidden = !sec
+    return sec ? [b, sec] : null
+  }).filter(Boolean)
+  const marcar = (activo) => botones.forEach((b) => { if (b === activo) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current') })
+  if (observadorNav) observadorNav.disconnect()
+  if (!secciones.length || !('IntersectionObserver' in window)) return
+  const visibles = new Map()
+  // Franja estrecha a 1/3 de la pantalla: la sección que la cruza es la activa.
+  observadorNav = new IntersectionObserver((entradas) => {
+    for (const en of entradas) {
+      const par = secciones.find(([, s]) => s === en.target)
+      if (en.isIntersecting) visibles.set(par[0], en.target.getBoundingClientRect().top); else visibles.delete(par[0])
+    }
+    const primero = secciones.find(([b]) => visibles.has(b))
+    marcar(primero ? primero[0] : null)
+  }, { rootMargin: '-30% 0px -60% 0px' })
+  secciones.forEach(([, s]) => observadorNav.observe(s))
 }
 
 function irA(id, filtro) {

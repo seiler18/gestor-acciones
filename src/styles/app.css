@@ -293,3 +293,44 @@ dialog input[type="password"] {
   .barra-fila, .divergentes .barra-fila { grid-template-columns: 4.5rem 1fr auto; gap: var(--e-2); }
   .barra-etq small { display: none; }
 }
+
+/* ----- cinta de navegación inferior: solo en el celular ----- */
+.pestanas { display: none; }
+.pestana-icono svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+@media (max-width: 720px) {
+  /* backdrop-filter crea un bloque contenedor para los hijos `fixed`: sin
+     quitarlo, la cinta quedaría pegada a la cabecera y no a la pantalla. */
+  .cabecera { backdrop-filter: none; background: var(--bg); }
+
+  .pestanas {
+    position: fixed; inset: auto 0 0 0; z-index: var(--z-barra);
+    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+    padding: var(--e-1) var(--e-1) calc(var(--e-1) + env(safe-area-inset-bottom));
+    background: var(--barra-fondo); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--borde);
+  }
+  .pestana {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-height: calc(var(--alto-nav) - var(--e-2)); padding: 0 2px;
+    border: 0; background: none; cursor: pointer;
+    color: var(--texto-tenue); font: inherit; font-size: var(--t-micro); font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pestana-etq { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pestana-icono { position: relative; display: grid; place-items: center; isolation: isolate; }
+  /* Píldora detrás del ícono de la sección a la vista. */
+  .pestana-icono::before {
+    content: ""; position: absolute; z-index: -1; inset: -4px -17px;
+    border-radius: var(--radio-pildora); background: var(--primario-tenue);
+    opacity: 0; transform: scale(0.8);
+    transition: opacity var(--dur) var(--curva), transform var(--dur) var(--curva);
+  }
+  .pestana[aria-current="true"] { color: var(--primario); }
+  .pestana[aria-current="true"] .pestana-icono::before { opacity: 1; transform: none; }
+
+  body { padding-bottom: calc(var(--alto-nav) + env(safe-area-inset-bottom)); }
+  #avisos { bottom: calc(var(--alto-nav) + var(--e-3) + env(safe-area-inset-bottom)); }
+  .panel, .resumen { scroll-margin-top: var(--e-7); }
+}
