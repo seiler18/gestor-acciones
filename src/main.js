@@ -361,6 +361,11 @@ function composicion(c) {
   </div>`
 }
 
+function pintarAreaEvolucion() {
+  const cArea = $('#graf-evolucion')
+  if (cArea) areaEvolucion(cArea, (estado.serie || []).map((d) => ({ etiqueta: fMes(d.mes), largo: fMes(d.mes), puesto: d.compras, recuperado: d.recibido })))
+}
+
 function pintarTablero() {
   const c = estado.calculo
   const serie = estado.serie || []
@@ -369,10 +374,7 @@ function pintarTablero() {
     const ab = c.abiertas.filter((p) => p.valor !== null)
     anillo(cAnillo, ab.filter((p) => p.gpNoRealizada > 0).length, ab.length)
   }
-  const cArea = $('#graf-evolucion')
-  if (cArea) {
-    areaEvolucion(cArea, serie.map((d) => ({ etiqueta: fMes(d.mes), largo: fMes(d.mes), puesto: d.compras, recuperado: d.recibido })))
-  }
+  pintarAreaEvolucion()
   const cDona = $('#dona')
   if (cDona) {
     const ab = c.abiertas.filter((p) => p.valor !== null && p.valor > 0)
@@ -552,7 +554,7 @@ function elegirMesDividendo(i) {
 let esperaResize
 window.addEventListener('resize', () => {
   clearTimeout(esperaResize)
-  esperaResize = setTimeout(pintarColumnasDividendos, 150)
+  esperaResize = setTimeout(() => { pintarColumnasDividendos(); pintarAreaEvolucion() }, 150)
 })
 
 const CLASE_ALERTA = [

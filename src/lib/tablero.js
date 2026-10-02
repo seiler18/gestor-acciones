@@ -69,10 +69,12 @@ function tooltip(lienzo) {
 
 /* ---------- Área: lo puesto frente a lo recuperado ---------- */
 
-const W = 720, H = 260, M = { t: 14, r: 12, b: 26, l: 60 }
+const W0 = 720, H = 260, M = { t: 14, r: 12, b: 26, l: 60 }
 
 /* puntos: [{etiqueta, largo, puesto, recuperado}] acumulados por mes. */
 export function areaEvolucion(contenedor, puntos) {
+  // Al ancho real del contenedor (con piso W0): con un viewBox fijo el texto se escala con él.
+  const W = Math.max(W0, Math.round(contenedor.clientWidth))
   const n = puntos.length
   const max = Math.max(0, ...puntos.map((p) => Math.max(p.puesto, p.recuperado)))
   const tope = redondeoLimpio(max || 1)
