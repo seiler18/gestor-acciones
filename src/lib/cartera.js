@@ -160,3 +160,49 @@ export function flujoDolares(movimientos) {
   }
   return f
 }
+
+/* Serie mensual acumulada para el tablero. Cada mes lleva lo ocurrido hasta
+   su último día: lo puesto (compras), lo recuperado (ventas + dividendos), el
+   costo de lo que sigue abierto y lo realizado. El costo y lo realizado salen
+   de costoPromedioMovil sobre los eventos hasta ese mes, así el último punto
+   cuadra con calcularCartera. `compraMes` es solo lo comprado en ese mes. */
+export function evolucion(movimientos) {
+  const movs = [...movimientos]
+    .filter((m) => TIPOS_ACCION.has(m.tipo) && m.ticker && m.ticker !== 'USD')
+    .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0))
+  if (!movs.length) return []
+  const claves = []
+  let [a, mes] = movs[0].fecha.slice(0, 7).split('-').map(Number)
+  const fin = movs[movs.length - 1].fecha.slice(0, 7)
+  for (;;) {
+    const k = `${a}-${String(mes).padStart(2, '0')}`
+    claves.push(k)
+    if (k >= fin) break
+    mes++
+    if (mes > 12) { mes = 1; a++ }
+  }
+  const eventosPorTicker = new Map()
+  for (const m of movs) {
+    if (m.tipo === 'dividendo') continue
+    if (!eventosPorTicker.has(m.ticker)) eventosPorTicker.set(m.ticker, [])
+    eventosPorTicker.get(m.ticker).push({ mes: m.fecha.slice(0, 7), tipo: m.tipo, cantidad: m.cantidad || 0, usd: m.usd || 0 })
+  }
+  return claves.map((k) => {
+    let compras = 0, ventas = 0, dividendos = 0, compraMes = 0
+    for (const m of movs) {
+      const mm = m.fecha.slice(0, 7)
+      if (mm > k) break
+      const usd = m.usd || 0
+      if (m.tipo === 'compra') { compras += usd; if (mm === k) compraMes += usd }
+      else if (m.tipo === 'venta') ventas += usd
+      else dividendos += usd
+    }
+    let costo = 0, realizado = 0
+    for (const ev of eventosPorTicker.values()) {
+      const r = costoPromedioMovil(ev.filter((e) => e.mes <= k))
+      if (r.acciones > RESIDUO) costo += r.costo
+      realizado += r.realizada
+    }
+    return { mes: k, compras, ventas, dividendos, recibido: ventas + dividendos, compraMes, costo, realizado }
+  })
+}

@@ -31,10 +31,16 @@
 
   /* ----- Datos ----- */
   --serie-1:      #2a78d6;   /* una sola serie: magnitud */
+  --serie-2:      #1baf7a;   /* segunda serie (lo recuperado): slot 3 de la skill dataviz */
   --positivo:     #2a78d6;   /* polo azul del par divergente */
   --negativo:     #e34948;   /* polo rojo */
   --texto-sube:   #006300;   /* cifra con signo +: acompaña al signo, no lo reemplaza */
   --texto-baja:   #b42525;
+
+  /* ----- Categorías de la dona: el mismo color en el arco, el punto y la fila.
+     La octava es «Otros» (gris): del octavo lugar en adelante no se distinguirían más tonos. ----- */
+  --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
+  --cat-5: #e87ba4; --cat-6: #008300; --cat-7: #4a3aa7; --cat-8: #6b7a8f;
 
   /* ----- Estados (reservados: no son series) ----- */
   --estado-bueno:   #0ca30c;
@@ -83,6 +89,7 @@
   /* ----- Movimiento ----- */
   --dur:  160ms;
   --dur-barra: 420ms;
+  --dur-crece: 700ms;        /* líneas, arcos y áreas del tablero al aparecer */
   --dur-medio: 280ms;        /* hover de mosaicos, diálogos al salir */
   --dur-entra: 560ms;        /* secciones que aparecen al hacer scroll */
   --dur-cuenta: 900ms;       /* cifras que cuentan hasta su valor (lib/movimiento.js) */
@@ -108,6 +115,9 @@
     --rejilla:     #2c2c2a;
     --eje:         #383835;
     --serie-1:     #3987e5;
+    --serie-2:     #199e70;
+    --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
+    --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #8a97aa;
     --positivo:    #3987e5;
     --negativo:    #e66767;
     --texto-sube:  #3ec43e;
@@ -131,6 +141,9 @@
   --rejilla:     #2c2c2a;
   --eje:         #383835;
   --serie-1:     #3987e5;
+  --serie-2:     #199e70;
+  --cat-1: #3987e5; --cat-2: #d95926; --cat-3: #199e70; --cat-4: #c98500;
+  --cat-5: #d55181; --cat-6: #008300; --cat-7: #9085e9; --cat-8: #8a97aa;
   --positivo:    #3987e5;
   --negativo:    #e66767;
   --texto-sube:  #3ec43e;
@@ -143,5 +156,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur: 0ms; --dur-barra: 0ms; --dur-medio: 0ms; --dur-entra: 0ms; --dur-cuenta: 0ms; --escalon: 0ms; --desplaza: 0px; }
+  :root { --dur: 0ms; --dur-barra: 0ms; --dur-crece: 0ms; --dur-medio: 0ms; --dur-entra: 0ms; --dur-cuenta: 0ms; --escalon: 0ms; --desplaza: 0px; }
 }

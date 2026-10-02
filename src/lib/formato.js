@@ -3,6 +3,7 @@
 
 const usd = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const clp = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })
+const usdCompacto = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 })
 const num = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 })
 const acciones = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 4, maximumFractionDigits: 4 })
 const pct = new Intl.NumberFormat('es-CL', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -18,6 +19,7 @@ const signo = (v, s) => (v > 0 ? `+${s}` : v < 0 ? `−${s.replace('-', '')}` : 
 
 export const fUsd = (v) => (ok(v) ? usd.format(v) : vacio)
 export const fUsdSigno = (v) => (ok(v) ? signo(Math.round(v * 100), usd.format(v)) : vacio)
+export const fUsdCompacto = (v) => (ok(v) ? usdCompacto.format(v) : vacio)
 export const fClp = (v) => (ok(v) ? clp.format(v) : vacio)
 export const fClpSigno = (v) => (ok(v) ? signo(Math.round(v), clp.format(v)) : vacio)
 export const fNum = (v) => (ok(v) ? num.format(v) : vacio)

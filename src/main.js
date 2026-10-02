@@ -1,11 +1,13 @@
 import './styles/tokens.css'
 import './styles/app.css'
 import './styles/movimiento.css'
+import './styles/tablero.css'
 import { protegerMarco } from './lib/marco.js'
-import { html, pintar, $, $$, aviso } from './lib/dom.js'
+import { html, pintar, crudo, $, $$, aviso } from './lib/dom.js'
 import { hayBackend, clave, cartera as pedirCartera, ErrorApi } from './lib/api.js'
-import { calcularCartera } from './lib/cartera.js'
+import { calcularCartera, evolucion } from './lib/cartera.js'
 import { datosDemo } from './demo.js'
+import { areaEvolucion, anillo, dona, calorMeses, sparkline, claseCat } from './lib/tablero.js'
 import { barras, divergentes, columnas, aplicarMedidas, activarTooltip } from './lib/graficos.js'
 import { fUsd, fUsdSigno, fClp, fClpSigno, fNum, fAcciones, fPct, fPctSigno, fFecha, fFechaHora, fMes, dir } from './lib/formato.js'
 import { revelarAlVer, contar, menosMovimiento } from './lib/movimiento.js'
@@ -72,6 +74,7 @@ function mostrar(modo, datos) {
   estado.modo = modo
   estado.datos = datos
   estado.calculo = calcularCartera(datos)
+  estado.serie = evolucion(datos.movimientos || [])
   estado.mesDiv = null
   pintarEstado()
   pintarTodo()
@@ -174,9 +177,11 @@ function pintarTodo() {
   pintar(app, html`
     ${estado.modo === 'demo' ? avisoDemo() : ''}
     ${resumen(c)}
+    ${tablero(c)}
     ${carteraActual(c)}
     ${resultadoPorActivo(c)}
     ${dividendos(c)}
+    ${composicion(c)}
     <div class="dos-col">
       ${alertas(estado.datos.alertas || [])}
       ${dolares(c)}
@@ -186,6 +191,7 @@ function pintarTodo() {
   aplicarMedidas(app)
   pintarTablaCartera()
   pintarColumnasDividendos()
+  pintarTablero()
   conectarMovimientos()
   conectarSecciones()
   revelarAlVer(app)
@@ -201,11 +207,12 @@ function avisoDemo() {
 
 /* Cada mosaico lleva a la sección que explica su cifra (data-ir) y, si
    corresponde, deja filtrados los movimientos (data-filtro-ir). */
-function tile(etiqueta, valor, { nota = '', clase = '', cuenta = null, formato = '', ir = '', filtro = '' } = {}) {
+function tile(etiqueta, valor, { nota = '', clase = '', cuenta = null, formato = '', ir = '', filtro = '', spark = '' } = {}) {
   return html`<button type="button" class="tile" data-ir="${ir}" ${filtro ? html`data-filtro-ir="${filtro}"` : ''}>
     <span class="tile-etq">${etiqueta}<span class="tile-flecha" aria-hidden="true">↓</span></span>
     <span class="tile-val ${clase}" ${cuenta !== null ? html`data-cuenta="${cuenta}" data-formato="${formato}"` : ''}>${valor}</span>
     ${nota ? html`<span class="tile-nota">${nota}</span>` : ''}
+    ${spark ? crudo(spark) : ''}
   </button>`
 }
 
@@ -247,6 +254,7 @@ function resumen(c) {
   const valores = { realizado: t.gpRealizada, noRealizado: t.gpNoRealizada, dividendos: t.dividendos }
   const max = Math.max(...Object.values(valores).map(Math.abs), 0) || 1
   const edad = edadPrecios(estado.datos.precios)
+  const serie = estado.serie || []
   const sobreInvertido = t.invertido > 0 ? t.resultado / t.invertido : null
   const parte = (k) => {
     const v = valores[k]
@@ -278,14 +286,118 @@ function resumen(c) {
     </div>
     <div class="tiles">
       ${tile('Valor de la cartera hoy', fUsd(t.valorCartera), { nota: `${c.abiertas.length} posición${c.abiertas.length === 1 ? '' : 'es'} abierta${c.abiertas.length === 1 ? '' : 's'}`, cuenta: t.valorCartera, formato: 'usd', ir: 'h-cartera' })}
-      ${tile('Invertido en acciones', fUsd(t.invertido), { nota: 'suma de todas las compras', cuenta: t.invertido, formato: 'usd', ir: 'h-mov', filtro: 'compra' })}
-      ${tile('Recibido por ventas', fUsd(t.ventas), { cuenta: t.ventas, formato: 'usd', ir: 'h-mov', filtro: 'venta' })}
-      ${tile('Dividendos acumulados', fUsd(t.dividendos), { cuenta: t.dividendos, formato: 'usd', ir: c.dividendosPorMes.length ? 'h-div' : 'h-mov', filtro: c.dividendosPorMes.length ? '' : 'dividendo' })}
+      ${tile('Invertido en acciones', fUsd(t.invertido), { nota: 'suma de todas las compras', cuenta: t.invertido, formato: 'usd', ir: 'h-mov', filtro: 'compra', spark: sparkline(serie.map((d) => d.compras), 'sp-puesto') })}
+      ${tile('Recibido por ventas', fUsd(t.ventas), { cuenta: t.ventas, formato: 'usd', ir: 'h-mov', filtro: 'venta', spark: sparkline(serie.map((d) => d.ventas), 'sp-recuperado') })}
+      ${tile('Dividendos acumulados', fUsd(t.dividendos), { cuenta: t.dividendos, formato: 'usd', ir: c.dividendosPorMes.length ? 'h-div' : 'h-mov', filtro: c.dividendosPorMes.length ? '' : 'dividendo', spark: sparkline(serie.map((d) => d.dividendos), 'sp-div') })}
       ${tile('Dólar hoy', t.dolar !== null ? `$${fNum(t.dolar)}` : '—', { nota: 'CLP por USD', ir: 'h-usd' })}
       ${tile('Comisiones pagadas', fClp(t.comisionesClp), { nota: 'en compra y venta de dólares', cuenta: t.comisionesClp, formato: 'clp', ir: 'h-usd' })}
     </div>
   </section>`
 }
+
+/* ===== tablero: anillo, área, dona y calendario de calor ===== */
+
+function tablero(c) {
+  const serie = estado.serie || []
+  if (!serie.length) return ''
+  const ab = c.abiertas
+  const conResultado = c.posiciones.filter((p) => Math.abs(p.resultado) >= 0.005)
+  const mejor = [...conResultado].sort((a, b) => b.resultado - a.resultado)[0]
+  const peor = [...conResultado].sort((a, b) => a.resultado - b.resultado)[0]
+  const mayor = ab[0]
+  const fila = (etq, p, texto, clase = '') => html`<div><dt>${etq}</dt><dd>${p
+    ? html`<button type="button" class="enlace-activo" data-ticker="${p.ticker}"><b>${p.ticker}</b></button> <small class="${clase}">${texto}</small>`
+    : '—'}</dd></div>`
+  return html`<section class="tablero revela" aria-label="Tablero de la cartera">
+    <div class="panel estado-cartera">
+      <header class="panel-cab">
+        <h2>Cómo va la cartera</h2>
+        <p>Posiciones abiertas que hoy valen más de lo que costaron</p>
+      </header>
+      <div class="anillo" id="anillo"></div>
+      <dl class="pares">
+        ${fila('Mayor peso', mayor, mayor ? fPct(mayor.peso) : '')}
+        ${fila('Mejor resultado', mejor, mejor ? fUsdSigno(mejor.resultado) : '', mejor ? dir(mejor.resultado) : '')}
+        ${fila('Peor resultado', peor && peor !== mejor ? peor : null, peor ? fUsdSigno(peor.resultado) : '', peor ? dir(peor.resultado) : '')}
+      </dl>
+    </div>
+    <div class="panel">
+      <header class="panel-cab">
+        <h2>Lo puesto y lo recuperado</h2>
+        <p>Acumulado mes a mes: lo que compraste frente a lo que ya volvió por ventas y dividendos. Recorre el gráfico con el puntero o las flechas</p>
+      </header>
+      <div class="grafico" id="graf-evolucion"></div>
+    </div>
+  </section>`
+}
+
+function composicion(c) {
+  const ab = c.abiertas.filter((p) => p.valor !== null && p.valor > 0)
+  const serie = estado.serie || []
+  if (!ab.length && !serie.length) return ''
+  return html`<div class="dos-col">
+    ${ab.length ? html`<section class="panel revela" aria-labelledby="h-comp">
+      <header class="panel-cab">
+        <h2 id="h-comp">Composición de la cartera</h2>
+        <p>Peso de cada activo en el valor de hoy. Toca uno para ver su detalle</p>
+      </header>
+      <div class="reparto">
+        <div class="dona" id="dona"></div>
+        <ul class="cats" id="cats-dona">
+          ${ab.map((p, i) => html`<li><button type="button" class="cat-fila" data-ticker="${p.ticker}">
+            <span class="cat-nombre"><i class="cat-punto d-${claseCat(i)}"></i><b>${p.ticker}</b><small>${p.nombre}</small></span>
+            <span class="cat-val">${fUsd(p.valor)}<small>${fPct(p.peso)}</small></span>
+          </button></li>`)}
+        </ul>
+      </div>
+    </section>` : ''}
+    ${serie.length ? html`<section class="panel revela" aria-labelledby="h-act">
+      <header class="panel-cab">
+        <h2 id="h-act">Actividad por mes</h2>
+        <p>Cuánto compraste cada mes; el punto marca los meses con dividendo</p>
+      </header>
+      <div class="calor" id="calor-meses"></div>
+    </section>` : ''}
+  </div>`
+}
+
+function pintarTablero() {
+  const c = estado.calculo
+  const serie = estado.serie || []
+  const cAnillo = $('#anillo')
+  if (cAnillo) {
+    const ab = c.abiertas.filter((p) => p.valor !== null)
+    anillo(cAnillo, ab.filter((p) => p.gpNoRealizada > 0).length, ab.length)
+  }
+  const cArea = $('#graf-evolucion')
+  if (cArea) {
+    areaEvolucion(cArea, serie.map((d) => ({ etiqueta: fMes(d.mes), largo: fMes(d.mes), puesto: d.compras, recuperado: d.recibido })))
+  }
+  const cDona = $('#dona')
+  if (cDona) {
+    const ab = c.abiertas.filter((p) => p.valor !== null && p.valor > 0)
+    const d = dona(cDona, ab.map((p) => ({ ticker: p.ticker, nombre: p.nombre, valor: p.valor })), {
+      total: c.totales.valorCartera,
+      alElegir: (seg) => seg.uno && abrirActivo(seg.uno),
+    })
+    const lista = $('#cats-dona')
+    lista.addEventListener('pointerover', (e) => d.resaltar(e.target.closest('[data-ticker]')?.dataset.ticker ?? null))
+    lista.addEventListener('pointerleave', () => d.resaltar(null))
+    lista.addEventListener('focusin', (e) => d.resaltar(e.target.closest('[data-ticker]')?.dataset.ticker ?? null))
+    lista.addEventListener('focusout', () => d.resaltar(null))
+  }
+  const cCalor = $('#calor-meses')
+  if (cCalor) calorMeses(cCalor, serie, c.dividendosPorMes, { alElegir: () => irA('h-mov') })
+}
+
+// La luz de los mosaicos sigue al puntero (--mx/--my por CSSOM, sin style="").
+document.addEventListener('pointermove', (e) => {
+  const t = e.target.closest?.('.tile')
+  if (!t) return
+  const r = t.getBoundingClientRect()
+  t.style.setProperty('--mx', `${e.clientX - r.left}px`)
+  t.style.setProperty('--my', `${e.clientY - r.top}px`)
+}, { passive: true })
 
 function carteraActual(c) {
   if (!c.abiertas.length) {
