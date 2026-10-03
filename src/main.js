@@ -2,6 +2,7 @@ import './styles/tokens.css'
 import './styles/app.css'
 import './styles/movimiento.css'
 import './styles/tablero.css'
+import './styles/efectos.css'
 import { protegerMarco } from './lib/marco.js'
 import { html, pintar, crudo, $, $$, aviso } from './lib/dom.js'
 import { hayBackend, clave, cartera as pedirCartera, ErrorApi } from './lib/api.js'
@@ -12,9 +13,16 @@ import { barras, divergentes, columnas, aplicarMedidas, activarTooltip } from '.
 import { fUsd, fUsdSigno, fClp, fClpSigno, fNum, fAcciones, fPct, fPctSigno, fFecha, fFechaHora, fMes, dir } from './lib/formato.js'
 import { revelarAlVer, contar, menosMovimiento } from './lib/movimiento.js'
 import { iniciarTema, alternarTema, temaActual } from './lib/tema.js'
+import { montarFondoHero } from './lib/fondo-hero.js'
+import { initMagnetico, initChispas } from './lib/efectos.js'
 
 protegerMarco()
 iniciarTema()
+
+// Imán en los botones de la página y chispas al mostrar más movimientos (lib/efectos.js).
+// Las chispas NO van en el acceso: abre un <dialog>, que en la capa superior las taparía.
+initMagnetico('#btn-acceso, .mas', { maximo: 6 })
+initChispas('.mas')
 
 const app = $('#app')
 const estado = { modo: 'demo', datos: null, filtro: 'todos', busqueda: '', verTodos: false, orden: { campo: 'valor', sube: false }, mesDiv: null }
@@ -195,6 +203,7 @@ function pintarTodo() {
   conectarMovimientos()
   conectarSecciones()
   revelarAlVer(app)
+  montarFondoHero(app)
   vigilarSecciones()
 }
 
@@ -267,6 +276,8 @@ function resumen(c) {
   }
   return html`<section class="resumen revela" aria-labelledby="h-resumen">
     <div class="hero hero-${dir(t.resultado)}">
+      <!-- Fondo de puntos con el tono del resultado: lo monta lib/fondo-hero.js -->
+      <div class="hero-puntos" aria-hidden="true"></div>
       <div class="hero-cab">
         <h2 id="h-resumen" class="hero-etq">Resultado total de la cartera</h2>
         ${edad ? html`<p class="hero-precios" title="La hoja trae los precios de Yahoo Finance cada vez que corre; Fintual puede mostrar uno más reciente"><span class="punto" aria-hidden="true"></span>${edad}</p>` : ''}
@@ -392,9 +403,9 @@ function pintarTablero() {
   if (cCalor) calorMeses(cCalor, serie, c.dividendosPorMes, { alElegir: () => irA('h-mov') })
 }
 
-// La luz de los mosaicos sigue al puntero (--mx/--my por CSSOM, sin style="").
+// La luz de los mosaicos y de las tres partes del resultado sigue al puntero (--mx/--my por CSSOM, sin style="").
 document.addEventListener('pointermove', (e) => {
-  const t = e.target.closest?.('.tile')
+  const t = e.target.closest?.('.tile, .parte')
   if (!t) return
   const r = t.getBoundingClientRect()
   t.style.setProperty('--mx', `${e.clientX - r.left}px`)

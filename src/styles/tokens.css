@@ -100,6 +100,9 @@
   --desplaza: 18px;          /* cuánto sube una sección al aparecer */
   --ciclo-halo: 9s;          /* el halo detrás del resultado total va y vuelve */
   --ciclo-latido: 2.4s;      /* el punto de «precios de hace…» */
+  --ciclo-brillo: 7s;         /* una vuelta del destello del nombre (efectos.css) */
+  --espera-brillo: 1.6s;     /* cuánto espera el primer destello */
+  --brillo-texto: var(--serie-2); /* el destello del nombre es del verde de ganancia, claro u oscuro */
 }
 
 @media (prefers-color-scheme: dark) {

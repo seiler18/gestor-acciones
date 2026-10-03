@@ -12,6 +12,8 @@ repo es público.
 
 | # | Fecha | Título | Estado |
 |---|---|---|---|
+| [0007](0007-efectos-de-interaccion.md) | 2026-10-03 | Efectos de interacción según la temática (inversiones) | completado en el código |
+| [0006](0006-tablero.md) | 2026-10-02 | Tablero: anillo, área, dona, calendario de calor y sparklines | completado en el código |
 | [0005](0005-precios-cada-hora-alertas-cada-4.md) | 2026-09-28 | Precios cada hora, alertas cada 4 horas | falta pegar Code.gs |
 | [0004](0004-costo-promedio-movil.md) | 2026-09-27 | Costo promedio móvil (como Fintual) y correos leídos también en la papelera | falta pegar Code.gs |
 | [0003](0003-transiciones-e-interaccion.md) | 2026-09-27 | Transiciones e interacción: la página responde al tocarla | completado |

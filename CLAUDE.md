@@ -16,6 +16,7 @@ Proyecto **nivel A**. Arquitectura y decisiones: `README.md`. Seguridad:
 | Cálculo de posiciones y G/P | `src/lib/cartera.js` — **misma aritmética que la hoja** |
 | Pantalla | `src/main.js` (secciones), `src/lib/graficos.js` (barras y columnas) |
 | Aparecer al hacer scroll, cifras que cuentan; tema | `src/lib/movimiento.js`, `src/styles/movimiento.css`; `src/lib/tema.js` |
+| Fondo de puntos del resultado total (tono sube/baja), imán y chispas, destello del nombre | `src/lib/fondo-hero.js` + `fondo-dotField.js`, `src/lib/efectos.js`, `src/styles/efectos.css` — adaptados de React Bits (MIT + Commons Clause: se usan aquí, no se redistribuyen) |
 | Datos de ejemplo sin clave | `src/demo.js` — con la forma exacta del contrato |
 | Cliente de la API; URL | `src/lib/api.js`; `src/config.js` |
 | CSP | `vite.config.js` (solo en build) |
