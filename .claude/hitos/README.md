@@ -12,6 +12,7 @@ repo es público.
 
 | # | Fecha | Título | Estado |
 |---|---|---|---|
+| [0008](0008-archivado-en-finanzasmaker.md) | 2026-10-12 | Archivado: pasa a ser «Inversiones» de FinanzasMaker | completado |
 | [0007](0007-efectos-de-interaccion.md) | 2026-10-03 | Efectos de interacción según la temática (inversiones) | completado en el código |
 | [0006](0006-tablero.md) | 2026-10-02 | Tablero: anillo, área, dona, calendario de calor y sparklines | completado en el código |
 | [0005](0005-precios-cada-hora-alertas-cada-4.md) | 2026-09-28 | Precios cada hora, alertas cada 4 horas | falta pegar Code.gs |

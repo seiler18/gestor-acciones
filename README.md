@@ -1,5 +1,11 @@
 # Gestor de acciones
 
+> **Archivado el 2026-10-12.** Este proyecto ahora es la página **Inversiones**
+> de [FinanzasMaker](https://github.com/seiler18/FinanzasMaker)
+> (<https://seiler18.github.io/FinanzasMaker/inversiones/>), con la misma
+> pantalla pero leyendo de una base en Supabase en vez de una hoja de Google.
+> Este repositorio queda solo como historia.
+
 Dashboard web de una cartera de acciones: posiciones abiertas, resultado por
 activo, dividendos por mes, cambio de dólares, alertas y movimientos.
 
